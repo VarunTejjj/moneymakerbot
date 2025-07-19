@@ -1,5 +1,3 @@
-# subscription_store.py
-
 import json
 import time
 
