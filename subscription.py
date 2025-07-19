@@ -3,6 +3,7 @@
 import random
 import string
 import time
+
 from config import KEY_VALIDITY_DAYS
 
 def generate_key():
