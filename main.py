@@ -13,7 +13,7 @@ from subscription import generate_key
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
-# /start command handler
+# Start command handler
 @dp.message_handler(Command("start"))
 async def start(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -22,7 +22,7 @@ async def start(message: Message):
     ])
     await message.answer("Welcome! Choose an option below:", reply_markup=keyboard)
 
-# Callback for "Take Subscription" button
+# Callback handler for subscription
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
     await call.message.answer(
@@ -34,7 +34,7 @@ async def subscribe_instruction(call: CallbackQuery):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# Handle photo screenshot verification
+# Handler for receiving and processing payment screenshots
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
     photo = message.photo[-1]
@@ -48,19 +48,14 @@ async def handle_photo(message: Message):
 
     if check_screenshot(tmp_path):
         key = generate_key()
-
-        # Create private link (1-time use, 10-min expiry)
         invite_link = await bot.create_chat_invite_link(
-            chat_id='@YourPrivateChannelUsername',  # Replace with your private channel username
-            expire_date=int((asyncio.get_event_loop().time()) + 600),
+            chat_id='@YourPrivateChannelUsername',  # Replace with your actual channel username
+            expire_date=int((asyncio.get_event_loop().time()) + 600),  # expires in 10 min
             member_limit=1
         )
 
         await message.answer(
-            f"✅ Payment Verified!\n\n"
-            f"🔑 Your Key: `{key}`\n"
-            f"📥 Access Channel: [Join Now]({invite_link.invite_link})\n\n"
-            f"⚠️ *This link is valid for 10 minutes and 1 use only!*",
+            f"✅ Payment Verified!\n\n🔑 Your Key: `{key}`\n📥 Access Channel: [Join Now]({invite_link.invite_link})\n\n⚠️ *This link is valid for 10 minutes and 1 use only!*",
             parse_mode=ParseMode.MARKDOWN
         )
     else:
@@ -68,7 +63,6 @@ async def handle_photo(message: Message):
 
     os.remove(tmp_path)
 
-# Main runner
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
