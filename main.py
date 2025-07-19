@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Message, CallbackQuery
 from aiogram.dispatcher.filters import Command
 
-from config import BOT_TOKEN, PRIVATE_CHANNEL_LINK, UPI_ID
+from config import BOT_TOKEN, PRIVATE_CHANNEL_LINK, UPI_ID, UPI_NAME
 from screenshot_checker import check_screenshot
 from subscription import generate_key
 
@@ -13,60 +13,50 @@ from subscription import generate_key
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
-# /start command handler
+# Start command handler
 @dp.message_handler(Command("start"))
 async def start(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📢 Join Channel", url="https://t.me/yourpublicchannel")],
         [InlineKeyboardButton(text="💰 Take Subscription", callback_data="subscribe")]
     ])
-    await message.answer("👋 Welcome! Choose an option below:", reply_markup=keyboard)
+    await message.answer("Welcome! Choose an option below:", reply_markup=keyboard)
 
-# Callback for "Take Subscription"
+# Callback handler for subscription
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
     await call.message.answer(
         "To get 7 days premium access:\n\n"
-        "💸 **Pay ₹5** to the UPI ID:\n"
-        f"`{UPI_ID}`\n\n"
-        "📸 Then send your payment screenshot here.",
+        "**Pay ₹5** to the UPI ID:\n"
+        f"`{UPI_ID}`\n"
+        f"Name: *{UPI_NAME}*\n\n"
+        "Then send your payment screenshot here.",
         parse_mode=ParseMode.MARKDOWN
     )
 
-# Handle screenshot image
+# Handler for receiving and processing payment screenshots
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
-    wait_msg = await message.reply("📸 Checking screenshot... please wait")
-
-    # Save photo to file
     photo = message.photo[-1]
-    file_path = f"screenshot_{message.from_user.id}.jpg"
-    await photo.download(file_path)
+    file = await bot.get_file(photo.file_id)
+    file_path = file.file_path
+    image_data = await bot.download_file(file_path)
 
-    # Check if screenshot contains your UPI ID
-    is_valid, upi_matches = check_screenshot(file_path)
+    tmp_path = f"{message.from_user.id}_screenshot.jpg"
+    with open(tmp_path, "wb") as f:
+        f.write(image_data.read())
 
-    if is_valid and "kothapellivaruntej31@fam" in upi_matches[0]:
+    if check_screenshot(tmp_path):
         key = generate_key()
-        invite_link = await bot.create_chat_invite_link(
-            chat_id=PRIVATE_CHANNEL_LINK,
-            expire_date=int(asyncio.get_event_loop().time() + 600),  # 10 minutes
-            member_limit=1
-        )
         await message.answer(
-            f"✅ *Payment Verified!*\n\n🔑 Your Key: `{key}`\n"
-            f"📥 Access Channel: [Join Now]({invite_link.invite_link})\n\n"
-            "⚠️ *This link is valid for 10 minutes and only usable once.*",
+            f"✅ Payment Verified!\n\n🔑 Your Key: `{key}`\n📥 Private Channel: {PRIVATE_CHANNEL_LINK}",
             parse_mode=ParseMode.MARKDOWN
         )
     else:
-        await message.reply("❌ Screenshot is invalid or UPI ID not found. Please send a valid payment screenshot.")
+        await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
 
-    # Clean up
-    os.remove(file_path)
-    await wait_msg.delete()
+    os.remove(tmp_path)
 
-# Run the bot
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
