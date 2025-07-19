@@ -1,21 +1,16 @@
-# screenshot_checker.py (improved)
-
 import pytesseract
 from PIL import Image
+from config import UPI_ID, UPI_NAME
 
 def check_screenshot(image_path):
     try:
         img = Image.open(image_path)
-        text = pytesseract.image_to_string(img).lower().strip()
+        text = pytesseract.image_to_string(img).lower()
 
-        print("[DEBUG] Extracted Text:", text)  # Optional: Helps in debugging
+        # Debug: print OCR text to console
+        print(f"[OCR TEXT] {text}")
 
-        # Flexible matching
-        keywords = ["upi", "payment", "paid", "received", "credited", "₹", "rs", "transaction", "successful"]
-
-        matches = [word for word in keywords if word in text]
-
-        return len(matches) >= 2  # Minimum 2 keywords required
+        return (UPI_ID.lower() in text) and (UPI_NAME.lower() in text)
     except Exception as e:
         print(f"[ERROR] OCR failed: {e}")
         return False
