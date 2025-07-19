@@ -37,31 +37,40 @@ async def subscribe_instruction(call: CallbackQuery):
 # Handler for receiving and processing payment screenshots
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
-    photo = message.photo[-1]
-    file = await bot.get_file(photo.file_id)
-    file_path = file.file_path
-    image_data = await bot.download_file(file_path)
+    # Send waiting message
+    waiting_msg = await message.answer("🕵️ Checking screenshot, please wait...")
 
-    tmp_path = f"{message.from_user.id}_screenshot.jpg"
-    with open(tmp_path, "wb") as f:
-        f.write(image_data.read())
+    try:
+        photo = message.photo[-1]
+        file = await bot.get_file(photo.file_id)
+        file_path = file.file_path
+        image_data = await bot.download_file(file_path)
 
-    if check_screenshot(tmp_path):
-        key = generate_key()
-        invite_link = await bot.create_chat_invite_link(
-            chat_id='@YourPrivateChannelUsername',  # Replace with your actual channel username
-            expire_date=int((asyncio.get_event_loop().time()) + 600),  # expires in 10 min
-            member_limit=1
-        )
+        tmp_path = f"{message.from_user.id}_screenshot.jpg"
+        with open(tmp_path, "wb") as f:
+            f.write(image_data.read())
 
-        await message.answer(
-            f"✅ Payment Verified!\n\n🔑 Your Key: `{key}`\n📥 Access Channel: [Join Now]({invite_link.invite_link})\n\n⚠️ *This link is valid for 10 minutes and 1 use only!*",
-            parse_mode=ParseMode.MARKDOWN
-        )
-    else:
-        await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
+        is_valid = check_screenshot(tmp_path)
 
-    os.remove(tmp_path)
+        os.remove(tmp_path)
+
+        if is_valid:
+            key = generate_key()
+            invite_link = await bot.create_chat_invite_link(
+                chat_id='@YourPrivateChannelUsername',  # Replace with your actual private channel username
+                expire_date=int(asyncio.get_event_loop().time()) + 600,
+                member_limit=1
+            )
+
+            await waiting_msg.edit_text(
+                f"✅ Payment Verified!\n\n🔑 Your Key: `{key}`\n📥 Access Channel: [Join Now]({invite_link.invite_link})\n\n⚠️ *This link is valid for 10 minutes and 1 use only!*",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        else:
+            await waiting_msg.edit_text("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
+    except Exception as e:
+        await waiting_msg.edit_text(f"⚠️ Something went wrong while checking your screenshot.\nError: `{str(e)}`",
+                                    parse_mode=ParseMode.MARKDOWN)
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
