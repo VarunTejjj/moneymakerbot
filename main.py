@@ -36,16 +36,20 @@ async def subscribe_instruction(call: CallbackQuery):
 # Handle screenshot image
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
-    wait_msg = await message.reply("🕵️ Checking screenshot, please wait...")
+    wait_msg = await message.reply("📸 Checking screenshot... please wait")
 
-    # Get the photo
-    photo = message.photo[-1]
-    file_info = await bot.get_file(photo.file_id)
-    downloaded = await bot.download_file(file_info.file_path)
+# Save photo to file
+photo = message.photo[-1]
+file_path = f"screenshot_{message.from_user.id}.jpg"
+await photo.download(file_path)
 
-    temp_file = f"{message.from_user.id}_screenshot.jpg"
-    with open(temp_file, "wb") as f:
-        f.write(downloaded.read())
+# Call checker
+is_valid, upi_matches = check_screenshot(file_path)
+
+if is_valid:
+    await message.reply(f"✅ UPI ID Found: {upi_matches[0]}")
+else:
+    await message.reply("❌ UPI ID not found in the screenshot. Try again.")
 
     # Check screenshot
     if check_screenshot(temp_file):
