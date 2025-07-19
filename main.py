@@ -1,5 +1,3 @@
-# main.py
-
 import asyncio
 import os
 import time
@@ -9,7 +7,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Message, CallbackQuery
 from aiogram.dispatcher.filters import Command
 
-from config import BOT_TOKEN, PRIVATE_CHANNEL_LINK, UPI_ID, UPI_NAME, KEY_VALIDITY_DAYS
+from config import BOT_TOKEN, UPI_ID, UPI_NAME, KEY_VALIDITY_DAYS
 from screenshot_checker import check_screenshot
 from subscription import generate_key
 from subscription_store import get_user_expiry, set_user_subscription
@@ -65,13 +63,23 @@ async def handle_photo(message: Message):
         expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
         set_user_subscription(message.from_user.id, expiry)
 
+        # Generate a private, single-use invite link valid for 1 hour
+        invite = await bot.create_chat_invite_link(
+            chat_id=-1002731631370,   # <<-- your private channel's ID
+            member_limit=1,
+            expire_date=now + 3600    # 1 hour from now, optional but recommended
+        )
+
         await message.answer(
-            f"✅ Payment Verified!\n\n🔑 Your Key: `{key}`\n📥 Private Channel: {PRIVATE_CHANNEL_LINK}",
+            f"✅ Payment Verified!\n\n"
+            f"🔑 Your Key: `{key}`\n"
+            f"📥 [Tap here to join the private channel]({invite.invite_link})\n"
+            f"⚠️ This link can only be used once and will expire in 1 hour.",
             parse_mode=ParseMode.MARKDOWN
         )
     else:
         await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
-    
+
     os.remove(tmp_path)
 
 async def main():
