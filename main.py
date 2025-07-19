@@ -12,6 +12,7 @@ from screenshot_checker import check_screenshot
 from subscription import generate_key
 from subscription_store import get_user_expiry, set_user_subscription
 
+# ---- BOT SETUP ----
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
@@ -48,17 +49,26 @@ async def subscribe_instruction(call: CallbackQuery):
 
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
-    # ...  (existing file and screenshot verification code)
+    photo = message.photo[-1]
+    file = await bot.get_file(photo.file_id)
+    file_path = file.file_path
+    image_data = await bot.download_file(file_path)
+
+    tmp_path = f"{message.from_user.id}_screenshot.jpg"
+    with open(tmp_path, "wb") as f:
+        f.write(image_data.read())
+
     if check_screenshot(tmp_path):
         key = generate_key()
         now = int(time.time())
         expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
         set_user_subscription(message.from_user.id, expiry)
 
+        # ---- Secure, one-time invite link for your private channel ----
         invite = await bot.create_chat_invite_link(
-            chat_id=-1002731631370,
+            chat_id=-1002731631370,    # your private channel ID
             member_limit=1,
-            expire_date=now + 3600
+            expire_date=now + 3600     # expires in 1 hour for security
         )
 
         await message.answer(
@@ -69,7 +79,7 @@ async def handle_photo(message: Message):
             parse_mode=ParseMode.MARKDOWN
         )
 
-        # Optional: revoke the invite link after a delay (e.g., 10 minutes)
+        # Clean-up: Optionally revoke the link after 10 minutes for extra safety
         async def delayed_revoke():
             await asyncio.sleep(600)
             try:
@@ -79,7 +89,6 @@ async def handle_photo(message: Message):
                 )
             except Exception as e:
                 print(f"[ERROR] Failed to revoke invite: {e}")
-
         asyncio.create_task(delayed_revoke())
     else:
         await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
