@@ -38,25 +38,19 @@ async def subscribe_instruction(call: CallbackQuery):
 async def handle_photo(message: Message):
     wait_msg = await message.reply("📸 Checking screenshot... please wait")
 
-# Save photo to file
-photo = message.photo[-1]
-file_path = f"screenshot_{message.from_user.id}.jpg"
-await photo.download(file_path)
+    # Save photo to file
+    photo = message.photo[-1]
+    file_path = f"screenshot_{message.from_user.id}.jpg"
+    await photo.download(file_path)
 
-# Call checker
-is_valid, upi_matches = check_screenshot(file_path)
+    # Call checker
+    is_valid, upi_matches = check_screenshot(file_path)
 
-if is_valid:
-    await message.reply(f"✅ UPI ID Found: {upi_matches[0]}")
-else:
-    await message.reply("❌ UPI ID not found in the screenshot. Try again.")
-
-    # Check screenshot
-    if check_screenshot(temp_file):
+    if is_valid:
         key = generate_key()
         invite_link = await bot.create_chat_invite_link(
-            chat_id=PRIVATE_CHANNEL_LINK,  # Set this to your private channel's @username
-            expire_date=int(asyncio.get_event_loop().time() + 600),  # 10 minutes
+            chat_id=PRIVATE_CHANNEL_LINK,
+            expire_date=int(asyncio.get_event_loop().time() + 600),
             member_limit=1
         )
         await message.answer(
@@ -66,9 +60,10 @@ else:
             parse_mode=ParseMode.MARKDOWN
         )
     else:
-        await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
+        await message.reply("❌ UPI ID not found in the screenshot. Try again.")
 
-    os.remove(temp_file)
+    # Cleanup
+    os.remove(file_path)
     await wait_msg.delete()
 
 # Run the bot
