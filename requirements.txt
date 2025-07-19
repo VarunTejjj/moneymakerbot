@@ -3,3 +3,5 @@ aiohttp==3.8.6
 pillow>=9.0.0
 pytesseract>=0.3.10
 cython
+python-dotenv
+requests
