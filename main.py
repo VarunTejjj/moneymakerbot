@@ -5,7 +5,12 @@ import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.types import ParseMode
-from aiogram.filters import CommandStart
+from aiogram.dispatcher.filters import Command   # ADD this import
+
+@dp.message_handler(Command("start"))            # Use the correct decorator for v2.x
+async def start(message: Message):
+    ...
+
 from aiogram.types import Message, CallbackQuery
 
 from config import BOT_TOKEN, PRIVATE_CHANNEL_LINK
