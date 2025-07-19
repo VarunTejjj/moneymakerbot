@@ -1,19 +1,22 @@
+# main.py
+
 import asyncio
 import os
+import time
+import datetime
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Message, CallbackQuery
 from aiogram.dispatcher.filters import Command
 
-from config import BOT_TOKEN, PRIVATE_CHANNEL_LINK, UPI_ID, UPI_NAME
+from config import BOT_TOKEN, PRIVATE_CHANNEL_LINK, UPI_ID, UPI_NAME, KEY_VALIDITY_DAYS
 from screenshot_checker import check_screenshot
 from subscription import generate_key
+from subscription_store import get_user_expiry, set_user_subscription
 
-# Instantiate bot and dispatcher
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
-# Start command handler
 @dp.message_handler(Command("start"))
 async def start(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -22,19 +25,29 @@ async def start(message: Message):
     ])
     await message.answer("Welcome! Choose an option below:", reply_markup=keyboard)
 
-# Callback handler for subscription
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
-    await call.message.answer(
-        "To get 7 days premium access:\n\n"
-        "**Pay ₹5** to the UPI ID:\n"
-        f"`{UPI_ID}`\n"
-        f"Name: *{UPI_NAME}*\n\n"
-        "Then send your payment screenshot here.",
-        parse_mode=ParseMode.MARKDOWN
-    )
+    user_id = call.from_user.id
+    now = int(time.time())
+    expiry = get_user_expiry(user_id)
 
-# Handler for receiving and processing payment screenshots
+    if expiry > now:
+        expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+        await call.message.answer(
+            f"🛡️ You already have a valid subscription!\n\n"
+            f"Your access will expire on: <b>{expiry_str}</b>",
+            parse_mode="HTML"
+        )
+    else:
+        await call.message.answer(
+            "To get 7 days premium access:\n\n"
+            f"**Pay ₹5** to the UPI ID:\n"
+            f"`{UPI_ID}`\n"
+            f"Name: *{UPI_NAME}*\n\n"
+            "Then send your payment screenshot here.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
     photo = message.photo[-1]
@@ -48,13 +61,17 @@ async def handle_photo(message: Message):
 
     if check_screenshot(tmp_path):
         key = generate_key()
+        now = int(time.time())
+        expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
+        set_user_subscription(message.from_user.id, expiry)
+
         await message.answer(
             f"✅ Payment Verified!\n\n🔑 Your Key: `{key}`\n📥 Private Channel: {PRIVATE_CHANNEL_LINK}",
             parse_mode=ParseMode.MARKDOWN
         )
     else:
         await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
-
+    
     os.remove(tmp_path)
 
 async def main():
