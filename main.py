@@ -48,10 +48,17 @@ async def handle_photo(message: Message):
 
     if check_screenshot(tmp_path):
         key = generate_key()
-        await message.answer(
-            f"✅ Payment Verified!\n\n🔑 Your Key: `{key}`\n📥 Private Channel: {PRIVATE_CHANNEL_LINK}",
-            parse_mode=ParseMode.MARKDOWN
-        )
+        # Generate private invite link with 1 use and 10-minute expiry
+invite_link = await bot.create_chat_invite_link(
+    chat_id='@YourPrivateChannelUsername',  # Replace with your actual channel username
+    expire_date=int((asyncio.get_event_loop().time()) + 600),  # expires in 10 min
+    member_limit=1
+)
+
+await message.answer(
+    f"✅ Payment Verified!\n\n🔑 Your Key: `{key}`\n📥 Access Channel: [Join Now]({invite_link.invite_link})\n\n⚠️ *This link is valid for 10 minutes and 1 use only!*",
+    parse_mode=ParseMode.MARKDOWN
+)
     else:
         await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
 
