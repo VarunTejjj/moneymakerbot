@@ -1,26 +1,20 @@
-# main.py
-
 import asyncio
 import os
+
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.types import ParseMode
-from aiogram.dispatcher.filters import Command   # ADD this import
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Message, CallbackQuery
+from aiogram.dispatcher.filters import Command
 
-@dp.message_handler(Command("start"))            # Use the correct decorator for v2.x
-async def start(message: Message):
-    ...
-
-from aiogram.types import Message, CallbackQuery
-
-from config import BOT_TOKEN, PRIVATE_CHANNEL_LINK
+from config import BOT_TOKEN, PRIVATE_CHANNEL_LINK, UPI_ID, UPI_NAME
 from screenshot_checker import check_screenshot
 from subscription import generate_key
 
+# Instantiate bot and dispatcher
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
-@dp.message(CommandStart())
+# Start command handler
+@dp.message_handler(Command("start"))
 async def start(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📢 Join Channel", url="https://t.me/yourpublicchannel")],
@@ -28,7 +22,8 @@ async def start(message: Message):
     ])
     await message.answer("Welcome! Choose an option below:", reply_markup=keyboard)
 
-@dp.callback_query(lambda c: c.data == "subscribe")
+# Callback handler for subscription
+@dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
     await call.message.answer(
         "To get 7 days premium access:\n\n"
@@ -39,11 +34,9 @@ async def subscribe_instruction(call: CallbackQuery):
         parse_mode=ParseMode.MARKDOWN
     )
 
-@dp.message()
+# Handler for receiving and processing payment screenshots
+@dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
-    if not message.photo:
-        return
-
     photo = message.photo[-1]
     file = await bot.get_file(photo.file_id)
     file_path = file.file_path
@@ -61,6 +54,7 @@ async def handle_photo(message: Message):
         )
     else:
         await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
+
     os.remove(tmp_path)
 
 async def main():
