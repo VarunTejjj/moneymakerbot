@@ -4,5 +4,9 @@ from PIL import Image
 from config import UPI_ID, UPI_NAME
 
 def check_screenshot(image_path):
-    text = pytesseract.image_to_string(Image.open(image_path)).lower()
-    return (UPI_ID.lower() in text) and (UPI_NAME.lower() in text)
+    try:
+        text = pytesseract.image_to_string(Image.open(image_path)).lower().strip()
+        return (UPI_ID.lower() in text) and (UPI_NAME.lower() in text)
+    except Exception as e:
+        print(f"[ERROR] Unable to process image: {e}")
+        return False
