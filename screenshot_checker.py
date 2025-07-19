@@ -1,15 +1,26 @@
-# screenshot_checker.py
-
 import pytesseract
 from PIL import Image
-from config import UPI_ID
+import re
+import os
 
 def check_screenshot(image_path):
     try:
+        # OCR to text
         img = Image.open(image_path)
-        text = pytesseract.image_to_string(img).lower().strip()
-        print("[OCR TEXT]:", text)
-        return UPI_ID.lower() in text
+        text = pytesseract.image_to_string(img)
+
+        # Debug: print OCR output to check what it sees
+        print("OCR Result:", text)
+
+        # Look for UPI ID format
+        upi_pattern = r'\b[\w.-]+@[\w]+\b'
+        matches = re.findall(upi_pattern, text)
+
+        if matches:
+            return True, matches  # UPI Found
+        else:
+            return False, []  # UPI Not Found
+
     except Exception as e:
-        print(f"[ERROR] OCR failed: {e}")
-        return False
+        print("Error in screenshot_checker:", e)
+        return False, []
