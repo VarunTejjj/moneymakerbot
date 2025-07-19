@@ -43,14 +43,14 @@ async def handle_photo(message: Message):
     file_path = f"screenshot_{message.from_user.id}.jpg"
     await photo.download(file_path)
 
-    # Call checker
+    # Check if screenshot contains your UPI ID
     is_valid, upi_matches = check_screenshot(file_path)
 
-    if is_valid:
+    if is_valid and "kothapellivaruntej31@fam" in upi_matches[0]:
         key = generate_key()
         invite_link = await bot.create_chat_invite_link(
             chat_id=PRIVATE_CHANNEL_LINK,
-            expire_date=int(asyncio.get_event_loop().time() + 600),
+            expire_date=int(asyncio.get_event_loop().time() + 600),  # 10 minutes
             member_limit=1
         )
         await message.answer(
@@ -60,9 +60,9 @@ async def handle_photo(message: Message):
             parse_mode=ParseMode.MARKDOWN
         )
     else:
-        await message.reply("❌ UPI ID not found in the screenshot. Try again.")
+        await message.reply("❌ Screenshot is invalid or UPI ID not found. Please send a valid payment screenshot.")
 
-    # Cleanup
+    # Clean up
     os.remove(file_path)
     await wait_msg.delete()
 
