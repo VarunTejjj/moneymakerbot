@@ -45,7 +45,7 @@ async def start(message: Message):
     logging.info(f"/start called by {message.from_user.id}")
     try:
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✨ Join Channel", url="https://t.me/+nkPAaWA1TI8xOTVl")],
+            [InlineKeyboardButton(text="✨ Join Channel", url="https://t.me/anythinghere07")],
             [InlineKeyboardButton(text="💳 Get Subscription", callback_data="subscribe")]
         ])
         await message.answer(
