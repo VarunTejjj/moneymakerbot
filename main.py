@@ -146,11 +146,9 @@ async def check_join(call: CallbackQuery):
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     await delete_single_message_safe(call.message.chat.id, call.message.message_id)
     name = call.from_user.first_name or "there"
-    user_id = call.from_user.id
     expiry = get_user_expiry(user_id)
-    now = int(time.time())
     if in_channel and in_group:
-        if expiry > now:
+        if expiry > time.time():
             sent = await call.message.answer(
                 f"🏆 Hi {name}!\n"
                 "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
@@ -190,7 +188,6 @@ async def back_to_menu(call: CallbackQuery):
     await delete_single_message_safe(call.message.chat.id, call.message.message_id)
     user_id = call.from_user.id
     try:
-        # Remove the /premem command from chat history
         history = [msg async for msg in bot.iter_history(call.message.chat.id, limit=2)]
         for msg in history[1:]:
             if msg.from_user and msg.from_user.id == user_id and msg.text and msg.text.startswith('/premem'):
@@ -198,7 +195,6 @@ async def back_to_menu(call: CallbackQuery):
                 break
     except Exception:
         pass
-    # Nothing further is sent here
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
@@ -244,7 +240,6 @@ async def handle_photo(message: Message):
         )
         session_messages[user_id]['menu'] = sent.message_id
         return
-
     checking_msg = await message.answer("🔎 Checking your payment screenshot...")
     session_messages[user_id]['checking'] = checking_msg.message_id
     photo = message.photo[-1]
@@ -277,11 +272,9 @@ async def handle_photo(message: Message):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)]
             ])
-            # Delete menu, payment, checking, screenshot, and start command if present
             msg_ids = [v for k, v in session_messages[user_id].items() if k in ('menu', 'payment', 'checking', 'screenshot', 'start_cmd')]
             await delete_messages_list(message.chat.id, msg_ids)
             try:
-                # Remove the /start command message itself (if present)
                 await bot.delete_message(message.chat.id, session_messages[user_id].get('start_cmd'))
             except Exception:
                 pass
@@ -311,12 +304,10 @@ async def premium_member(message: Message):
     # Remove previous bot message and the /premem command itself
     try:
         history = [msg async for msg in bot.iter_history(message.chat.id, limit=3)]
-        found_premem = False
         for msg in history[1:]:
-            if msg.from_user and msg.from_user.id == (await bot.me).id and not found_premem:
+            if msg.from_user and msg.from_user.id == (await bot.me).id:
                 await bot.delete_message(message.chat.id, msg.message_id)
                 break
-        # Remove the /premem command message itself
         await bot.delete_message(message.chat.id, message.message_id)
     except Exception:
         pass
