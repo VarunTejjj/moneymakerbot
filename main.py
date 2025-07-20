@@ -288,8 +288,9 @@ async def handle_photo(message: Message):
                 expire_date=now + 3600
             )
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)]
-            ])
+    [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)],
+    [InlineKeyboardButton("🚀 Lets Start", callback_data="lets_start")]
+])
             msg_ids = [v for k, v in session_messages[user_id].items() if k in ('menu', 'payment', 'checking', 'screenshot', 'start_cmd')]
             await delete_messages_list(message.chat.id, msg_ids)
             try:
