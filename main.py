@@ -66,10 +66,10 @@ async def is_member(bot, user_id, chat_id):
     except Exception:
         return False
 
-def main_menu():
+def premium_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton("✨ Join Channel", url=PUBLIC_CHANNEL_LINK)],
-        [InlineKeyboardButton("💳 Get Subscription", callback_data="subscribe")]
+        [InlineKeyboardButton("💳 Take Subscription", callback_data="subscribe")],
+        [InlineKeyboardButton("👁️‍🗨️ See Premium Features", callback_data="see_features")]
     ])
 
 def force_join_menu():
@@ -79,10 +79,14 @@ def force_join_menu():
         [InlineKeyboardButton("✅ I joined", callback_data="check_join")]
     ])
 
+def back_button():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton("⬅️ Back", callback_data="back_to_menu")]
+    ])
+
 @dp.message_handler(Command("start"))
 async def start(message: Message):
     user_id = message.from_user.id
-    # Force join check
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     if not in_channel or not in_group:
@@ -96,7 +100,6 @@ async def start(message: Message):
         )
         return
 
-    # If user satisfied force join, show premium or normal menu
     name = message.from_user.first_name or "there"
     expiry = get_user_expiry(user_id)
     now = int(time.time())
@@ -114,9 +117,9 @@ async def start(message: Message):
             f"👋 <b>Hi {name}!</b>\n"
             "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
             "Unlock exclusive tips, signals, and more.\n"
-            "Press one of the buttons below to continue.",
+            "Select an option below.",
             parse_mode="HTML",
-            reply_markup=main_menu()
+            reply_markup=premium_menu()
         )
 
 @dp.callback_query_handler(lambda c: c.data == "check_join")
@@ -125,7 +128,6 @@ async def check_join(call: CallbackQuery):
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     if in_channel and in_group:
-        # Show MoneyMaker menu
         name = call.from_user.first_name or "there"
         expiry = get_user_expiry(user_id)
         now = int(time.time())
@@ -140,18 +142,32 @@ async def check_join(call: CallbackQuery):
             )
         else:
             await call.message.answer(
-                f"👋 <b>Hi {name}!</b>\n"
-                "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
-                "Unlock exclusive tips, signals, and more.\n"
-                "Press one of the buttons below to continue.",
+                "Select an option below.",
                 parse_mode="HTML",
-                reply_markup=main_menu()
+                reply_markup=premium_menu()
             )
     else:
         await call.message.answer(
             "❗ You must join both the channel and group to continue.",
             reply_markup=force_join_menu()
         )
+
+@dp.callback_query_handler(lambda c: c.data == "back_to_menu")
+async def back_to_menu(call: CallbackQuery):
+    await call.message.delete()
+    await call.message.answer(
+        "Select an option below.",
+        parse_mode="HTML",
+        reply_markup=premium_menu()
+    )
+
+@dp.callback_query_handler(lambda c: c.data == "see_features")
+async def see_features(call: CallbackQuery):
+    await call.answer()
+    await call.message.answer(
+        "Hello thier",  # Replace with your real premium features message as desired.
+        reply_markup=back_button()
+    )
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
@@ -185,7 +201,6 @@ async def subscribe_instruction(call: CallbackQuery):
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
     user_id = message.from_user.id
-    # Enforce force join here too
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     if not in_channel or not in_group:
@@ -210,16 +225,7 @@ async def handle_photo(message: Message):
             expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
             name = message.from_user.first_name or "Unknown"
             set_user_subscription(user_id, key, expiry, name)
-            # Announce in public
-            try:
-                await bot.send_message(
-                    chat_id=PUBLIC_CHANNEL_ID,
-                    text=f"🎉 User <b>{name}</b> (ID: <code>{user_id}</code>) just joined <b>MoneyMaker Premium</b>! Welcome aboard! 🙌",
-                    parse_mode="HTML"
-                )
-            except Exception as e:
-                logging.warning(f"Public channel announce failed: {e}")
-            # Announce in ground (group)
+            # Announce only in group
             try:
                 await bot.send_message(
                     chat_id=FORCE_GROUP_ID,
@@ -228,7 +234,6 @@ async def handle_photo(message: Message):
                 )
             except Exception as e:
                 logging.warning(f"Group announcement failed: {e}")
-            # Private channel invite
             invite = await bot.create_chat_invite_link(
                 chat_id=PREMIUM_CHANNEL_ID,
                 member_limit=1,
