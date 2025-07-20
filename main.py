@@ -84,14 +84,26 @@ def back_button():
         [InlineKeyboardButton("⬅️ Back", callback_data="back_to_menu")]
     ])
 
-async def delete_user_bot_messages(chat_id):
+async def delete_specific_messages(chat_id, message_ids):
+    for mid in message_ids:
+        try:
+            await bot.delete_message(chat_id, mid)
+        except Exception:
+            pass
+
+async def delete_bot_and_user_messages(chat_id, from_id):
+    """Delete last N messages from bot and user (workaround for cleaning chat upon payment verification)."""
     try:
+        to_del = []
         async for msg in bot.iter_history(chat_id, limit=30):
-            if msg.from_user and msg.from_user.id == (await bot.me).id:
-                try:
-                    await bot.delete_message(chat_id, msg.message_id)
-                except Exception:
-                    pass
+            # Remove bot's own messages or user's photo (their payment screenshot)
+            if msg.from_user and (msg.from_user.id == (await bot.me).id or (msg.from_user.id == from_id and msg.content_type == 'photo')):
+                to_del.append(msg.message_id)
+        for mid in to_del:
+            try:
+                await bot.delete_message(chat_id, mid)
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -101,7 +113,7 @@ async def start(message: Message):
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     if not in_channel or not in_group:
-        await message.answer(
+        sent = await message.answer(
             "🚀 To continue, join BOTH our official channel and group:\n\n"
             f"1️⃣ [Join Channel]({PUBLIC_CHANNEL_LINK})\n"
             f"2️⃣ [Join Group]({FORCE_GROUP_LINK})\n\n"
@@ -137,7 +149,6 @@ async def check_join(call: CallbackQuery):
     user_id = call.from_user.id
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
-    # Remove force join buttons
     try:
         await bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
@@ -214,13 +225,14 @@ async def subscribe_instruction(call: CallbackQuery):
             parse_mode="HTML"
         )
     else:
-        await call.message.answer(
+        sent = await call.message.answer(
             f"To get <b>7 days of premium access</b>:\n\n"
             f"💸 <b>Pay ₹5</b> UPI: <code>{UPI_ID}</code>\n"
             f"Name: <b>{UPI_NAME}</b>\n\n"
             "Then send your payment screenshot here.",
             parse_mode="HTML"
         )
+        # Store msg id for deletion after payment, using context storage as needed if integrating further
 
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
@@ -234,10 +246,7 @@ async def handle_photo(message: Message):
         )
         return
 
-    # Delete previous bot messages first
-    await delete_user_bot_messages(message.chat.id)
-    await asyncio.sleep(0.7)
-    await message.answer("🔎 Checking your payment screenshot...")
+    checking_msg = await message.answer("🔎 Checking your payment screenshot...")
     photo = message.photo[-1]
     file = await bot.get_file(photo.file_id)
     file_path = file.file_path
@@ -268,8 +277,8 @@ async def handle_photo(message: Message):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)]
             ])
-            # Delete all prior bot messages before sending the final confirmation
-            await delete_user_bot_messages(message.chat.id)
+            # Delete all prior bot and user screenshot messages
+            await delete_bot_and_user_messages(message.chat.id, message.from_user.id)
             await asyncio.sleep(0.7)
             await message.answer(
                 f"✅ <b>Payment Verified!</b>\n\n"
@@ -280,6 +289,10 @@ async def handle_photo(message: Message):
                 reply_markup=keyboard
             )
         else:
+            try:
+                await bot.delete_message(message.chat.id, checking_msg.message_id)
+            except Exception:
+                pass
             await message.answer(
                 "❌ <b>Screenshot is invalid.</b>\nPlease send a valid UPI payment screenshot.",
                 parse_mode="HTML"
