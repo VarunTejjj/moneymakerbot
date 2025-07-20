@@ -16,7 +16,9 @@ from subscription import generate_key
 logging.basicConfig(level=logging.INFO)
 
 SUBS_FILE = "subscriptions.json"
-ADMIN_IDS = [1831313735]  # Your Telegram user ID as admin
+ADMIN_IDS = [1831313735]     # Your Telegram user ID as admin
+PUBLIC_CHANNEL_ID = -1001234567890     # Replace with your public channel's Telegram ID
+PREMIUM_CHANNEL_ID = -1002731631370    # Your premium channel's Telegram ID
 
 def load_subscriptions():
     try:
@@ -41,9 +43,13 @@ def get_user_key(user_id):
     record = get_user_record(user_id)
     return record.get("key", None)
 
-def set_user_subscription(user_id, key, expiry):
+def get_user_name(user_id):
+    record = get_user_record(user_id)
+    return record.get("name", "Unknown")
+
+def set_user_subscription(user_id, key, expiry, name):
     subs = load_subscriptions()
-    subs[str(user_id)] = {"key": key, "expiry": expiry}
+    subs[str(user_id)] = {"key": key, "expiry": expiry, "name": name}
     save_subscriptions(subs)
 
 bot = Bot(token=BOT_TOKEN)
@@ -85,10 +91,13 @@ async def subscribe_instruction(call: CallbackQuery):
     expiry = get_user_expiry(user_id)
     key = get_user_key(user_id)
     if expiry > now and key:
+        record = get_user_record(user_id)
+        name = record.get("name", call.from_user.first_name or "Unknown")
         expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
-        purchase_str = datetime.datetime.fromtimestamp(expiry - KEY_VALIDITY_DAYS*24*60*60).strftime('%Y-%m-%d %H:%M:%S')
+        purchase_str = datetime.datetime.fromtimestamp(expiry - KEY_VALIDITY_DAYS * 24 * 60 * 60).strftime('%Y-%m-%d %H:%M:%S')
         await call.message.answer(
             f"🟢 <b>You have an active subscription!</b>\n\n"
+            f"<b>Name:</b> {name}\n"
             f"<b>Key:</b> <code>{key}</code>\n"
             f"<b>Purchased:</b> {purchase_str}\n"
             f"<b>Expires:</b> {expiry_str}",
@@ -118,9 +127,20 @@ async def handle_photo(message: Message):
             key = generate_key()
             now = int(time.time())
             expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
-            set_user_subscription(message.from_user.id, key, expiry)
+            name = message.from_user.first_name or "Unknown"
+            set_user_subscription(message.from_user.id, key, expiry, name)
+            # Public Channel Announcement
+            try:
+                await bot.send_message(
+                    chat_id=PUBLIC_CHANNEL_ID,
+                    text=f"🎉 User <b>{name}</b> (ID: <code>{message.from_user.id}</code>) just joined <b>MoneyMaker Premium</b>! Welcome aboard! 🙌",
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logging.warning(f"Failed to announce to public: {e}")
+            # Private channel invite
             invite = await bot.create_chat_invite_link(
-                chat_id=-1002731631370,
+                chat_id=PREMIUM_CHANNEL_ID,
                 member_limit=1,
                 expire_date=now + 3600
             )
@@ -154,14 +174,12 @@ async def premium_member(message: Message):
         purchase_time = expiry - KEY_VALIDITY_DAYS * 24 * 60 * 60
         purchase_str = datetime.datetime.fromtimestamp(purchase_time).strftime('%Y-%m-%d %H:%M:%S')
         expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
-        # Use MarkdownV2 for spoiler (||text||) support
-        safe_key = key.replace("_", "\\_").replace("-", "\\-")
         await message.answer(
             "<b>👤 Premium Subscription Details</b>\n\n"
             f"<b>Purchase Date:</b> {purchase_str}\n"
             f"<b>Expiry Date:</b> {expiry_str}\n\n"
-            f"<b>Your Key:</b> ||{safe_key}||",
-            parse_mode="MarkdownV2"
+            f"<b>Your Key:</b> <span class=\"tg-spoiler\">{key}</span>",
+            parse_mode="HTML"
         )
     else:
         await message.answer(
@@ -185,9 +203,13 @@ async def check_subscribers(message: Message):
     for user_id, record in subs.items():
         expiry = record.get("expiry", 0)
         key = record.get("key", "N/A")
+        name = record.get("name", "Unknown")
         if expiry > now:
             dt = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
-            reply += f"• <code>{user_id}</code> — key: <code>{key}</code> — expires: <b>{dt}</b>\n"
+            reply += (
+                f"• <code>{user_id}</code> — <b>{name}</b> — "
+                f"key: <code>{key}</code> — expires: <b>{dt}</b>\n"
+            )
             active += 1
 
     if active == 0:
