@@ -12,8 +12,8 @@ from config import BOT_TOKEN, UPI_ID, UPI_NAME, KEY_VALIDITY_DAYS
 from screenshot_checker import check_screenshot
 from subscription import generate_key
 
-# --- MongoDB Atlas connection ---
-MONGODB_URI = "mongodb+srv://thepvt:MadMax31@thepvt.1pyehh7.mongodb.net/?retryWrites=true&w=majority&appName=ThePvt"
+# --- MongoDB Atlas connection (use non-SRV URI) ---
+MONGODB_URI = "mongodb://thepvt:MadMax31@ac-xyz-shard-00-00.mongodb.net:27017,ac-xyz-shard-00-01.mongodb.net:27017,ac-xyz-shard-00-02.mongodb.net:27017/?ssl=true&replicaSet=atlas-xyz-shard-0&authSource=admin"
 client = MongoClient(MONGODB_URI)
 db = client['moneymaker']  # Database name
 subs = db['subscriptions'] # Collection name
