@@ -12,11 +12,11 @@ from config import BOT_TOKEN, UPI_ID, UPI_NAME, KEY_VALIDITY_DAYS
 from screenshot_checker import check_screenshot
 from subscription import generate_key
 
-# --- MongoDB Atlas connection (use non-SRV URI) ---
-MONGODB_URI = "mongodb://thepvt:MadMax31@ac-xyz-shard-00-00.mongodb.net:27017,ac-xyz-shard-00-01.mongodb.net:27017,ac-xyz-shard-00-02.mongodb.net:27017/?ssl=true&replicaSet=atlas-xyz-shard-0&authSource=admin"
+# --- MongoDB Atlas connection (standard non-SRV URI for Termux) ---
+MONGODB_URI = "mongodb://thepvt:MadMax31@thepvt-shard-00-00.1pyehh7.mongodb.net:27017,thepvt-shard-00-01.1pyehh7.mongodb.net:27017,thepvt-shard-00-02.1pyehh7.mongodb.net:27017/?ssl=true&replicaSet=atlas-mqak2q-shard-0&authSource=admin&retryWrites=true&w=majority"
 client = MongoClient(MONGODB_URI)
-db = client['moneymaker']  # Database name
-subs = db['subscriptions'] # Collection name
+db = client['moneymaker']
+subs = db['subscriptions']
 
 def get_user_expiry(user_id):
     doc = subs.find_one({"user_id": user_id, "expiry": {"$gt": int(time.time())}})
