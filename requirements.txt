@@ -5,3 +5,4 @@ pytesseract>=0.3.10
 cython
 python-dotenv
 requests
+pymongo>=4.1.0
