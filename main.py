@@ -215,21 +215,13 @@ async def see_features(call: CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data == "back_to_menu")
 async def back_to_menu(call: CallbackQuery):
-    await delete_single_message_safe(call.message.chat.id, call.message.message_id)
-    user_id = call.from_user.id
-    if 'features' in session_messages.get(user_id, {}):
-        name = call.from_user.first_name or "there"
-        expiry = get_user_expiry(user_id)
-        now = int(time.time())
-        if expiry > now:
-            sent = await call.message.answer(
-                f"🏆 Hi {name}!\n"
-                "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
-                "<code>✨ PREMIUM SUBSCRIBER</code> ✅\n\n"
-                "Thank you for being a valued member! Your subscription is <b>active</b>.\n"
-                "Use <b>/premem</b> anytime to view your subscription details and key.",
-                parse_mode="HTML"
-            )
+    # Remove the premium details message only
+    try:
+        await bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception:
+        pass
+    # Do not send any new menus or messages here
+
         else:
             sent = await call.message.answer(
                 f"👋 Hi <b>{name}</b>!\n"
@@ -349,25 +341,20 @@ async def handle_photo(message: Message):
 
 @dp.message_handler(commands=["premem"])
 async def premium_member(message: Message):
+    # Remove only the user's /premem command message
     try:
-        history = [msg async for msg in bot.iter_history(message.chat.id, limit=2)]
-        if len(history) == 2:
-            prev_msg = history[1]
-            await delete_single_message_safe(message.chat.id, prev_msg.message_id)
-        await delete_single_message_safe(message.chat.id, message.message_id)
-        return
+        await bot.delete_message(message.chat.id, message.message_id)
     except Exception:
         pass
     user_id = message.from_user.id
     record = get_user_record(user_id)
     expiry = record.get("expiry", 0)
     key = record.get("key", None)
-    now = int(time.time())
-    if expiry > now and key:
+    if expiry > int(time.time()) and key:
         purchase_time = expiry - KEY_VALIDITY_DAYS * 24 * 60 * 60
         purchase_str = datetime.datetime.fromtimestamp(purchase_time).strftime('%Y-%m-%d %H:%M:%S')
         expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
-        sent = await message.answer(
+        await message.answer(
             "<b>👤 Premium Subscription Details</b>\n\n"
             f"<b>Purchase Date:</b> {purchase_str}\n"
             f"<b>Expiry Date:</b> {expiry_str}\n\n"
@@ -375,7 +362,6 @@ async def premium_member(message: Message):
             parse_mode="HTML",
             reply_markup=back_button()
         )
-        session_messages[user_id]['premem'] = sent.message_id
     else:
         await message.answer(
             "❌ You are not a premium subscriber. Please subscribe to access premium features."
