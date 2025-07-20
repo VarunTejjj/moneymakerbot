@@ -6,11 +6,34 @@ import datetime
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Message, CallbackQuery
 from aiogram.dispatcher.filters import Command
+from pymongo import MongoClient
 
 from config import BOT_TOKEN, UPI_ID, UPI_NAME, KEY_VALIDITY_DAYS
 from screenshot_checker import check_screenshot
 from subscription import generate_key
-from subscription_store import get_user_expiry, set_user_subscription
+
+# ---- MONGODB SETUP ----
+MONGODB_URI = "mongodb://localhost:27017/"   # adjust if needed
+client = MongoClient(MONGODB_URI)
+db = client.moneymaker 
+subs = db.subscriptions
+
+def get_user_expiry(user_id):
+    doc = subs.find_one({"user_id": user_id, "expiry": {"$gt": int(time.time())}})
+    return doc["expiry"] if doc else 0
+
+def set_user_subscription(user_id, key, expiry):
+    subs.update_one({"user_id": user_id}, {"$set": {
+        "user_id": user_id,
+        "key": key,
+        "expiry": expiry
+    }}, upsert=True)
+
+def store_key(key, expiry, user_id):
+    subs.insert_one({"key": key, "expiry": expiry, "user_id": user_id})
+
+def get_key_record(key):
+    return subs.find_one({"key": key})
 
 # ---- BOT SETUP ----
 bot = Bot(token=BOT_TOKEN)
@@ -19,7 +42,7 @@ dp = Dispatcher(bot)
 @dp.message_handler(Command("start"))
 async def start(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Join Channel", url="https://t.me/anythinghere07")],
+        [InlineKeyboardButton(text="📢 Join Channel", url="https://t.me/yourpublicchannel")],
         [InlineKeyboardButton(text="💰 Take Subscription", callback_data="subscribe")]
     ])
     await message.answer("Welcome! Choose an option below:", reply_markup=keyboard)
@@ -62,13 +85,13 @@ async def handle_photo(message: Message):
         key = generate_key()
         now = int(time.time())
         expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
-        set_user_subscription(message.from_user.id, expiry)
+        set_user_subscription(message.from_user.id, key, expiry)
+        store_key(key, expiry, message.from_user.id)
 
-        # ---- Secure, one-time invite link for your private channel ----
         invite = await bot.create_chat_invite_link(
-            chat_id=-1002731631370,    # your private channel ID
+            chat_id=-1002731631370,
             member_limit=1,
-            expire_date=now + 3600     # expires in 1 hour for security
+            expire_date=now + 3600
         )
 
         await message.answer(
@@ -79,7 +102,6 @@ async def handle_photo(message: Message):
             parse_mode=ParseMode.MARKDOWN
         )
 
-        # Clean-up: Optionally revoke the link after 10 minutes for extra safety
         async def delayed_revoke():
             await asyncio.sleep(600)
             try:
