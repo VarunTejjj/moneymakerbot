@@ -19,7 +19,7 @@ dp = Dispatcher(bot)
 @dp.message_handler(Command("start"))
 async def start(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Join Channel", url="https://t.me/yourpublicchannel")],
+        [InlineKeyboardButton(text="📢 Join Channel", url="https://t.me/anythinghere07")],
         [InlineKeyboardButton(text="💰 Take Subscription", callback_data="subscribe")]
     ])
     await message.answer("Welcome! Choose an option below:", reply_markup=keyboard)
