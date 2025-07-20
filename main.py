@@ -12,11 +12,11 @@ from config import BOT_TOKEN, UPI_ID, UPI_NAME, KEY_VALIDITY_DAYS
 from screenshot_checker import check_screenshot
 from subscription import generate_key
 
-# --- MongoDB Atlas connection (standard non-SRV URI for Termux) ---
+# --- MongoDB Atlas connection (standard URI for Termux and servers) ---
 MONGODB_URI = "mongodb://thepvt:MadMax31@thepvt-shard-00-00.1pyehh7.mongodb.net:27017,thepvt-shard-00-01.1pyehh7.mongodb.net:27017,thepvt-shard-00-02.1pyehh7.mongodb.net:27017/?ssl=true&replicaSet=atlas-mqak2q-shard-0&authSource=admin&retryWrites=true&w=majority"
 client = MongoClient(MONGODB_URI)
-db = client['moneymaker']
-subs = db['subscriptions']
+db = client["moneymaker"]
+subs = db["subscriptions"]
 
 def get_user_expiry(user_id):
     doc = subs.find_one({"user_id": user_id, "expiry": {"$gt": int(time.time())}})
@@ -46,6 +46,7 @@ async def start(message: Message):
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
+    await call.answer()  # Always answer callback to avoid Telegram UI issues
     user_id = call.from_user.id
     now = int(time.time())
     expiry = get_user_expiry(user_id)
