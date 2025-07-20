@@ -48,8 +48,8 @@ def set_user_subscription(user_id, key, expiry):
     save_subscriptions(subs)
 
 def escape_markdown(text):
-    # Escapes all special MarkdownV2 characters
-    return re.sub(r'([_*\[\]()~`>#+\-=|{}.!\\])', r'\\\1', text)
+    # Escapes all special MarkdownV2 characters for Telegram
+    return re.sub(r'([_*\[\]()~`>#+\-=|{}.!\\<>\?])', r'\\\1', str(text))
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
@@ -61,12 +61,12 @@ async def start(message: Message):
     now = int(time.time())
     if expiry > now:
         await message.answer(
-            f"🏆 Hi {name}!\n"
-            "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
-            "<code>✨ PREMIUM SUBSCRIBER</code> ✅\n\n"
-            "Thank you for being a valued member! Your subscription is <b>active</b>.\n"
-            "Use <b>/premem</b> anytime to view your subscription details and key.",
-            parse_mode="HTML"
+            f"🏆 Hi {escape_markdown(name)}!\n"
+            f"*Welcome to MoneyMaker Premium! 🚀*\n\n"
+            "`✨ PREMIUM SUBSCRIBER` ✅\n\n"
+            "Thank you for being a valued member! Your subscription is *active*.\n"
+            "Use */premem* anytime to view your subscription details and key.",
+            parse_mode="MarkdownV2"
         )
     else:
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -74,11 +74,11 @@ async def start(message: Message):
             [InlineKeyboardButton("💳 Get Subscription", callback_data="subscribe")]
         ])
         await message.answer(
-            f"👋 <b>Hi {name}!</b>\n"
-            "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
+            f"👋 *Hi {escape_markdown(name)}!*\n"
+            "*Welcome to MoneyMaker Premium! 🚀*\n\n"
             "Unlock exclusive tips, signals, and more.\n"
             "Press one of the buttons below to continue.",
-            parse_mode="HTML",
+            parse_mode="MarkdownV2",
             reply_markup=keyboard
         )
 
@@ -90,22 +90,22 @@ async def subscribe_instruction(call: CallbackQuery):
     expiry = get_user_expiry(user_id)
     key = get_user_key(user_id)
     if expiry > now and key:
-        expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
-        purchase_str = datetime.datetime.fromtimestamp(expiry - KEY_VALIDITY_DAYS*24*60*60).strftime('%Y-%m-%d %H:%M:%S')
+        expiry_str = escape_markdown(datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S'))
+        purchase_str = escape_markdown(datetime.datetime.fromtimestamp(expiry - KEY_VALIDITY_DAYS*24*60*60).strftime('%Y-%m-%d %H:%M:%S'))
         await call.message.answer(
-            f"🟢 <b>You have an active subscription!</b>\n\n"
-            f"<b>Key:</b> <code>{key}</code>\n"
-            f"<b>Purchased:</b> {purchase_str}\n"
-            f"<b>Expires:</b> {expiry_str}",
-            parse_mode="HTML"
+            f"🟢 *You have an active subscription!*\n\n"
+            f"*Key:* ||{escape_markdown(key)}||\n"
+            f"*Purchased:* {purchase_str}\n"
+            f"*Expires:* {expiry_str}",
+            parse_mode="MarkdownV2"
         )
     else:
         await call.message.answer(
-            f"To get <b>7 days of premium access</b>:\n\n"
-            f"💸 <b>Pay ₹5</b> UPI: <code>{UPI_ID}</code>\n"
-            f"Name: <b>{UPI_NAME}</b>\n\n"
+            f"To get *7 days of premium access*:\n\n"
+            f"💸 *Pay ₹5* UPI: `{escape_markdown(UPI_ID)}`\n"
+            f"Name: *{escape_markdown(UPI_NAME)}*\n\n"
             "Then send your payment screenshot here.",
-            parse_mode="HTML"
+            parse_mode="MarkdownV2"
         )
 
 @dp.message_handler(content_types=types.ContentType.PHOTO)
@@ -133,23 +133,23 @@ async def handle_photo(message: Message):
                 [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)]
             ])
             await message.answer(
-                f"✅ <b>Payment Verified!</b>\n\n"
-                f"🔑 <b>Your Key:</b> <code>{key}</code>\n"
-                "<i>Tap below for your single-use join link.</i>\n"
-                "⚠️ <b>This link is only for you and will expire in 1 hour.</b>",
-                parse_mode="HTML",
+                "✅ *Payment Verified!*\n\n"
+                f"*Your Key:* ||{escape_markdown(key)}||\n"
+                "_Tap below for your single-use join link._\n"
+                "*This link is only for you and will expire in 1 hour.*",
+                parse_mode="MarkdownV2",
                 reply_markup=keyboard
             )
         else:
             await message.answer(
-                "❌ <b>Screenshot is invalid.</b>\nPlease send a valid UPI payment screenshot.",
-                parse_mode="HTML"
+                "❌ *Screenshot is invalid.*\nPlease send a valid UPI payment screenshot.",
+                parse_mode="MarkdownV2"
             )
     finally:
         os.remove(tmp_path)
 
 @dp.message_handler(commands=["premem"])
-async def premium_member(message: Message):
+async def premium_member(message: types.Message):
     user_id = message.from_user.id
     record = get_user_record(user_id)
     expiry = record.get("expiry", 0)
@@ -157,16 +157,16 @@ async def premium_member(message: Message):
     now = int(time.time())
     if expiry > now and key:
         purchase_time = expiry - KEY_VALIDITY_DAYS * 24 * 60 * 60
-        purchase_str = datetime.datetime.fromtimestamp(purchase_time).strftime('%Y-%m-%d %H:%M:%S')
-        expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+        purchase_str = escape_markdown(datetime.datetime.fromtimestamp(purchase_time).strftime('%Y-%m-%d %H:%M:%S'))
+        expiry_str = escape_markdown(datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S'))
         key_md = escape_markdown(key)
-        await message.answer(
-            "<b>👤 Premium Subscription Details</b>\n\n"
-            f"<b>Purchase Date:</b> {purchase_str}\n"
-            f"<b>Expiry Date:</b> {expiry_str}\n\n"
-            f"<b>Your Key:</b> ||{key_md}||",
-            parse_mode="MarkdownV2"
+        message_md = (
+            "*👤 Premium Subscription Details*\n\n"
+            f"*Purchase Date:* {purchase_str}\n"
+            f"*Expiry Date:* {expiry_str}\n\n"
+            f"*Your Key:* ||{key_md}||"
         )
+        await message.answer(message_md, parse_mode="MarkdownV2")
     else:
         await message.answer(
             "❌ You are not a premium subscriber. Please subscribe to access premium features."
@@ -183,21 +183,21 @@ async def check_subscribers(message: Message):
         await message.reply("No users have taken the subscription yet.")
         return
 
-    reply = "<b>Active Subscribers:</b>\n\n"
+    reply = "*Active Subscribers:*\n\n"
     now = int(time.time())
     active = 0
     for user_id, record in subs.items():
         expiry = record.get("expiry", 0)
         key = record.get("key", "N/A")
         if expiry > now:
-            dt = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
-            reply += f"• <code>{user_id}</code> — key: <code>{key}</code> — expires: <b>{dt}</b>\n"
+            dt = escape_markdown(datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S'))
+            reply += f"• `{user_id}` — key: `{escape_markdown(key)}` — expires: *{dt}*\n"
             active += 1
 
     if active == 0:
-        await message.reply("No active subscriptions found.", parse_mode="HTML")
+        await message.reply("No active subscriptions found.", parse_mode="MarkdownV2")
     else:
-        await message.reply(reply, parse_mode="HTML")
+        await message.reply(reply, parse_mode="MarkdownV2")
 
 async def main():
     logging.info("Bot is running.")
