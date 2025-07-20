@@ -15,8 +15,8 @@ from subscription import generate_key
 # --- MongoDB Atlas connection ---
 MONGODB_URI = "mongodb+srv://thepvt:MadMax31@thepvt.1pyehh7.mongodb.net/?retryWrites=true&w=majority&appName=ThePvt"
 client = MongoClient(MONGODB_URI)
-db = client['moneymaker']  # use your DB name
-subs = db['subscriptions']
+db = client['moneymaker']  # Database name
+subs = db['subscriptions'] # Collection name
 
 def get_user_expiry(user_id):
     doc = subs.find_one({"user_id": user_id, "expiry": {"$gt": int(time.time())}})
@@ -94,6 +94,7 @@ async def handle_photo(message: Message):
             f"⚠️ This link can only be used once and will expire in 1 hour.",
             parse_mode=ParseMode.MARKDOWN
         )
+
         async def delayed_revoke():
             await asyncio.sleep(600)
             try:
