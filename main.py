@@ -16,9 +16,9 @@ from subscription import generate_key
 logging.basicConfig(level=logging.INFO)
 
 SUBS_FILE = "subscriptions.json"
-ADMIN_IDS = [1831313735]     # Your Telegram user ID as admin
-PUBLIC_CHANNEL_ID = -1002800054599     # Replace with your public channel's Telegram ID
-PREMIUM_CHANNEL_ID = -1002731631370    # Your premium channel's Telegram ID
+ADMIN_IDS = [1831313735]  # Your Telegram user ID as admin
+PUBLIC_CHANNEL_ID = -1002800054599    # UPDATE with your public channel's ID
+PREMIUM_CHANNEL_ID = -1002731631370   # UPDATE with your premium channel's ID
 
 def load_subscriptions():
     try:
@@ -129,7 +129,7 @@ async def handle_photo(message: Message):
             expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
             name = message.from_user.first_name or "Unknown"
             set_user_subscription(message.from_user.id, key, expiry, name)
-            # Public Channel Announcement
+            # Announce in public channel
             try:
                 await bot.send_message(
                     chat_id=PUBLIC_CHANNEL_ID,
@@ -191,12 +191,10 @@ async def check_subscribers(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.reply("🚫 You are not authorized to use this command.")
         return
-
     subs = load_subscriptions()
     if not subs:
         await message.reply("No users have taken the subscription yet.")
         return
-
     reply = "<b>Active Subscribers:</b>\n\n"
     now = int(time.time())
     active = 0
@@ -211,13 +209,96 @@ async def check_subscribers(message: Message):
                 f"key: <code>{key}</code> — expires: <b>{dt}</b>\n"
             )
             active += 1
-
     if active == 0:
         await message.reply("No active subscriptions found.", parse_mode="HTML")
     else:
         await message.reply(reply, parse_mode="HTML")
 
+@dp.message_handler(commands=["extend"])
+async def extend_sub(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.reply("🚫 You are not authorized to use this command.")
+        return
+    args = message.get_args().split()
+    if len(args) != 2 or not args[1].isdigit():
+        await message.reply("Usage: /extend <user_id> <days>")
+        return
+    user_id, days = args[0], int(args[1])
+    subs = load_subscriptions()
+    now = int(time.time())
+    if user_id in subs:
+        expiry = max(subs[user_id]["expiry"], now) + days * 86400
+        key = subs[user_id]["key"]
+        name = subs[user_id].get("name", "Unknown")
+    else:
+        key = generate_key()
+        expiry = now + days * 86400
+        name = "Unknown"
+    subs[user_id] = {"key": key, "expiry": expiry, "name": name}
+    save_subscriptions(subs)
+    dt = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+    await message.reply(f"User {user_id}'s subscription now expires on {dt}.")
+
+@dp.message_handler(commands=["revoke"])
+async def revoke_sub(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.reply("🚫 You are not authorized to use this command.")
+        return
+    args = message.get_args().split()
+    if len(args) != 1:
+        await message.reply("Usage: /revoke <user_id>")
+        return
+    user_id = args[0]
+    subs = load_subscriptions()
+    if user_id in subs:
+        del subs[user_id]
+        save_subscriptions(subs)
+        try:
+            await bot.kick_chat_member(PREMIUM_CHANNEL_ID, int(user_id))
+            await bot.unban_chat_member(PREMIUM_CHANNEL_ID, int(user_id))
+        except Exception as e:
+            pass
+        await message.reply(f"Revoked and removed user {user_id} from premium channel.")
+    else:
+        await message.reply("No such user in the subscription database.")
+
+@dp.message_handler(commands=["status"])
+async def admin_status(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.reply("🚫 You are not authorized to use this command.")
+        return
+    subs = load_subscriptions()
+    now = int(time.time())
+    active = sum(1 for v in subs.values() if v["expiry"] > now)
+    soon_exp = sorted([(uid, v["expiry"]) for uid, v in subs.items() if now < v["expiry"] < now + 3 * 86400], key=lambda x: x[1])
+    expired = [uid for uid, v in subs.items() if v["expiry"] <= now]
+    text = (f"👥 Active Premium: {active}\n"
+            f"🔔 Expiring Soon:\n" +
+            "".join(f"• {uid} — {datetime.datetime.fromtimestamp(exp).strftime('%Y-%m-%d %H:%M:%S')}\n" for uid, exp in soon_exp) +
+            f"\n❌ Expired: {', '.join(expired) if expired else 'None'}")
+    await message.reply(text)
+
+async def remove_expired_users():
+    while True:
+        now = int(time.time())
+        subs = load_subscriptions()
+        updated = False
+        for user_id, rec in list(subs.items()):
+            if rec["expiry"] <= now:
+                try:
+                    await bot.kick_chat_member(PREMIUM_CHANNEL_ID, int(user_id))
+                    await bot.unban_chat_member(PREMIUM_CHANNEL_ID, int(user_id))
+                    await bot.send_message(int(user_id), "Your premium subscription has expired. Contact us anytime to renew!")
+                except Exception:
+                    pass
+                del subs[user_id]
+                updated = True
+        if updated:
+            save_subscriptions(subs)
+        await asyncio.sleep(3600)
+
 async def main():
+    asyncio.create_task(remove_expired_users())
     logging.info("Bot is running.")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
