@@ -86,16 +86,20 @@ def back_button():
         [InlineKeyboardButton("⬅️ Back", callback_data="back_to_menu")]
     ])
 
-async def delete_specific_messages(chat_id, message_ids):
+async def delete_single_message_safe(chat_id, message_id):
+    try:
+        await bot.delete_message(chat_id, message_id)
+    except Exception:
+        pass
+
+async def delete_messages_list(chat_id, message_ids):
     for mid in message_ids:
-        try:
-            await bot.delete_message(chat_id, mid)
-        except Exception:
-            pass
+        await delete_single_message_safe(chat_id, mid)
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
     user_id = message.from_user.id
+    session_messages[user_id] = {}
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     if not in_channel or not in_group:
@@ -107,9 +111,9 @@ async def start(message: Message):
             parse_mode="Markdown",
             reply_markup=force_join_menu()
         )
-        session_messages[user_id] = {'menu': sent.message_id}
+        session_messages[user_id]['menu'] = sent.message_id
+        session_messages[user_id]['start_cmd'] = message.message_id
         return
-
     name = message.from_user.first_name or "there"
     expiry = get_user_expiry(user_id)
     now = int(time.time())
@@ -122,7 +126,8 @@ async def start(message: Message):
             "Use <b>/premem</b> anytime to view your subscription details and key.",
             parse_mode="HTML"
         )
-        session_messages[user_id] = {'menu': sent.message_id}
+        session_messages[user_id]['menu'] = sent.message_id
+        session_messages[user_id]['start_cmd'] = message.message_id
     else:
         sent = await message.answer(
             f"👋 Hi <b>{name}</b>!\n"
@@ -131,17 +136,15 @@ async def start(message: Message):
             parse_mode="HTML",
             reply_markup=premium_menu(name)
         )
-        session_messages[user_id] = {'menu': sent.message_id}
+        session_messages[user_id]['menu'] = sent.message_id
+        session_messages[user_id]['start_cmd'] = message.message_id
 
 @dp.callback_query_handler(lambda c: c.data == "check_join")
 async def check_join(call: CallbackQuery):
     user_id = call.from_user.id
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
-    try:
-        await bot.delete_message(call.message.chat.id, call.message.message_id)
-    except Exception:
-        pass
+    await delete_single_message_safe(call.message.chat.id, call.message.message_id)
     name = call.from_user.first_name or "there"
     user_id = call.from_user.id
     expiry = get_user_expiry(user_id)
@@ -156,7 +159,7 @@ async def check_join(call: CallbackQuery):
                 "Use <b>/premem</b> anytime to view your subscription details and key.",
                 parse_mode="HTML"
             )
-            session_messages[user_id] = {'menu': sent.message_id}
+            session_messages[user_id]['menu'] = sent.message_id
         else:
             sent = await call.message.answer(
                 f"👋 Hi <b>{name}</b>!\n"
@@ -165,20 +168,17 @@ async def check_join(call: CallbackQuery):
                 parse_mode="HTML",
                 reply_markup=premium_menu(name)
             )
-            session_messages[user_id] = {'menu': sent.message_id}
+            session_messages[user_id]['menu'] = sent.message_id
     else:
         sent = await call.message.answer(
             "❗ You must join both the channel and group to continue.",
             reply_markup=force_join_menu()
         )
-        session_messages[user_id] = {'menu': sent.message_id}
+        session_messages[user_id]['menu'] = sent.message_id
 
 @dp.callback_query_handler(lambda c: c.data == "see_features")
 async def see_features(call: CallbackQuery):
-    try:
-        await bot.delete_message(call.message.chat.id, call.message.message_id)
-    except Exception:
-        pass
+    await delete_single_message_safe(call.message.chat.id, call.message.message_id)
     sent = await call.message.answer(
         "Hello thier",
         reply_markup=back_button()
@@ -187,11 +187,18 @@ async def see_features(call: CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data == "back_to_menu")
 async def back_to_menu(call: CallbackQuery):
+    await delete_single_message_safe(call.message.chat.id, call.message.message_id)
+    user_id = call.from_user.id
     try:
-        await bot.delete_message(call.message.chat.id, call.message.message_id)
+        # Remove the /premem command from chat history
+        history = [msg async for msg in bot.iter_history(call.message.chat.id, limit=2)]
+        for msg in history[1:]:
+            if msg.from_user and msg.from_user.id == user_id and msg.text and msg.text.startswith('/premem'):
+                await bot.delete_message(call.message.chat.id, msg.message_id)
+                break
     except Exception:
         pass
-    # No menu sent here after /premem back (chat is left clear)
+    # Nothing further is sent here
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
@@ -237,9 +244,9 @@ async def handle_photo(message: Message):
         )
         session_messages[user_id]['menu'] = sent.message_id
         return
+
     checking_msg = await message.answer("🔎 Checking your payment screenshot...")
     session_messages[user_id]['checking'] = checking_msg.message_id
-
     photo = message.photo[-1]
     file = await bot.get_file(photo.file_id)
     file_path = file.file_path
@@ -270,8 +277,14 @@ async def handle_photo(message: Message):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)]
             ])
-            msg_ids = [v for k, v in session_messages[user_id].items() if k in ('menu', 'payment', 'checking', 'screenshot')]
-            await delete_specific_messages(message.chat.id, msg_ids)
+            # Delete menu, payment, checking, screenshot, and start command if present
+            msg_ids = [v for k, v in session_messages[user_id].items() if k in ('menu', 'payment', 'checking', 'screenshot', 'start_cmd')]
+            await delete_messages_list(message.chat.id, msg_ids)
+            try:
+                # Remove the /start command message itself (if present)
+                await bot.delete_message(message.chat.id, session_messages[user_id].get('start_cmd'))
+            except Exception:
+                pass
             await message.answer(
                 f"✅ <b>Payment Verified!</b>\n\n"
                 f"🔑 <b>Your Key:</b> <code>{key}</code>\n"
@@ -295,13 +308,16 @@ async def handle_photo(message: Message):
 
 @dp.message_handler(commands=["premem"])
 async def premium_member(message: Message):
-    # Remove previous bot message before details
+    # Remove previous bot message and the /premem command itself
     try:
-        history = [msg async for msg in bot.iter_history(message.chat.id, limit=2)]
-        if len(history) == 2:
-            prev_msg = history[1]
-            if prev_msg.from_user and prev_msg.from_user.id == (await bot.me).id:
-                await bot.delete_message(message.chat.id, prev_msg.message_id)
+        history = [msg async for msg in bot.iter_history(message.chat.id, limit=3)]
+        found_premem = False
+        for msg in history[1:]:
+            if msg.from_user and msg.from_user.id == (await bot.me).id and not found_premem:
+                await bot.delete_message(message.chat.id, msg.message_id)
+                break
+        # Remove the /premem command message itself
+        await bot.delete_message(message.chat.id, message.message_id)
     except Exception:
         pass
     user_id = message.from_user.id
@@ -326,13 +342,6 @@ async def premium_member(message: Message):
         await message.answer(
             "❌ You are not a premium subscriber. Please subscribe to access premium features."
         )
-
-@dp.callback_query_handler(lambda c: c.data == "back_to_menu")
-async def back_to_menu(call: CallbackQuery):
-    try:
-        await bot.delete_message(call.message.chat.id, call.message.message_id)
-    except Exception:
-        pass
 
 @dp.message_handler(commands=["check"])
 async def check_subscribers(message: Message):
