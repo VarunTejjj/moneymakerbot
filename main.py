@@ -12,30 +12,27 @@ from config import BOT_TOKEN, UPI_ID, UPI_NAME, KEY_VALIDITY_DAYS
 from screenshot_checker import check_screenshot
 from subscription import generate_key
 
-# ---- MONGODB SETUP ----
-MONGODB_URI = "mongodb://localhost:27017/"   # adjust if needed
+# --- MongoDB Atlas connection ---
+MONGODB_URI = "mongodb+srv://thepvt:MadMax31@thepvt.1pyehh7.mongodb.net/?retryWrites=true&w=majority&appName=ThePvt"
 client = MongoClient(MONGODB_URI)
-db = client.moneymaker 
-subs = db.subscriptions
+db = client['moneymaker']  # use your DB name
+subs = db['subscriptions']
 
 def get_user_expiry(user_id):
     doc = subs.find_one({"user_id": user_id, "expiry": {"$gt": int(time.time())}})
     return doc["expiry"] if doc else 0
 
 def set_user_subscription(user_id, key, expiry):
-    subs.update_one({"user_id": user_id}, {"$set": {
-        "user_id": user_id,
-        "key": key,
-        "expiry": expiry
-    }}, upsert=True)
+    subs.update_one(
+        {"user_id": user_id},
+        {"$set": {"user_id": user_id, "key": key, "expiry": expiry}},
+        upsert=True
+    )
 
 def store_key(key, expiry, user_id):
     subs.insert_one({"key": key, "expiry": expiry, "user_id": user_id})
 
-def get_key_record(key):
-    return subs.find_one({"key": key})
-
-# ---- BOT SETUP ----
+# --- aiogram setup ---
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
@@ -52,7 +49,6 @@ async def subscribe_instruction(call: CallbackQuery):
     user_id = call.from_user.id
     now = int(time.time())
     expiry = get_user_expiry(user_id)
-
     if expiry > now:
         expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
         await call.message.answer(
@@ -76,7 +72,6 @@ async def handle_photo(message: Message):
     file = await bot.get_file(photo.file_id)
     file_path = file.file_path
     image_data = await bot.download_file(file_path)
-
     tmp_path = f"{message.from_user.id}_screenshot.jpg"
     with open(tmp_path, "wb") as f:
         f.write(image_data.read())
@@ -87,13 +82,11 @@ async def handle_photo(message: Message):
         expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
         set_user_subscription(message.from_user.id, key, expiry)
         store_key(key, expiry, message.from_user.id)
-
         invite = await bot.create_chat_invite_link(
             chat_id=-1002731631370,
             member_limit=1,
             expire_date=now + 3600
         )
-
         await message.answer(
             f"✅ Payment Verified!\n\n"
             f"🔑 Your Key: `{key}`\n"
@@ -101,7 +94,6 @@ async def handle_photo(message: Message):
             f"⚠️ This link can only be used once and will expire in 1 hour.",
             parse_mode=ParseMode.MARKDOWN
         )
-
         async def delayed_revoke():
             await asyncio.sleep(600)
             try:
