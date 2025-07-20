@@ -34,12 +34,12 @@ def get_user_record(user_id):
     return subs.get(str(user_id), {})
 
 def get_user_expiry(user_id):
-    entry = get_user_record(user_id)
-    return entry.get("expiry", 0)
+    record = get_user_record(user_id)
+    return record.get("expiry", 0)
 
 def get_user_key(user_id):
-    entry = get_user_record(user_id)
-    return entry.get("key", None)
+    record = get_user_record(user_id)
+    return record.get("key", None)
 
 def set_user_subscription(user_id, key, expiry):
     subs = load_subscriptions()
@@ -51,20 +51,31 @@ dp = Dispatcher(bot)
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
-    logging.info(f"/start called by {message.from_user.id}")
     name = message.from_user.first_name or "there"
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✨ Join Channel", url="https://t.me/+nkPAaWA1TI8xOTVl")],
-        [InlineKeyboardButton(text="💳 Get Subscription", callback_data="subscribe")]
-    ])
-    await message.answer(
-        f"👋 <b>Hi {name}!</b>\n"
-        "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
-        "Unlock exclusive tips, signals, and more.\n"
-        "Press one of the buttons below to continue.",
-        parse_mode="HTML",
-        reply_markup=keyboard
-    )
+    expiry = get_user_expiry(message.from_user.id)
+    now = int(time.time())
+    if expiry > now:
+        await message.answer(
+            f"🏆 Hi {name}!\n"
+            "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
+            "<code>✨ PREMIUM SUBSCRIBER</code> ✅\n\n"
+            "Thank you for being a valued member! Your subscription is <b>active</b>.\n"
+            "Use <b>/premem</b> anytime to view your subscription details and key.",
+            parse_mode="HTML"
+        )
+    else:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton("✨ Join Channel", url="https://t.me/+nkPAaWA1TI8xOTVl")],
+            [InlineKeyboardButton("💳 Get Subscription", callback_data="subscribe")]
+        ])
+        await message.answer(
+            f"👋 <b>Hi {name}!</b>\n"
+            "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
+            "Unlock exclusive tips, signals, and more.\n"
+            "Press one of the buttons below to continue.",
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
@@ -131,6 +142,31 @@ async def handle_photo(message: Message):
             )
     finally:
         os.remove(tmp_path)
+
+@dp.message_handler(commands=["premem"])
+async def premium_member(message: Message):
+    user_id = message.from_user.id
+    record = get_user_record(user_id)
+    expiry = record.get("expiry", 0)
+    key = record.get("key", None)
+    now = int(time.time())
+    if expiry > now and key:
+        purchase_time = expiry - KEY_VALIDITY_DAYS * 24 * 60 * 60
+        purchase_str = datetime.datetime.fromtimestamp(purchase_time).strftime('%Y-%m-%d %H:%M:%S')
+        expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+        # Use MarkdownV2 for spoiler (||text||) support
+        safe_key = key.replace("_", "\\_").replace("-", "\\-")
+        await message.answer(
+            "<b>👤 Premium Subscription Details</b>\n\n"
+            f"<b>Purchase Date:</b> {purchase_str}\n"
+            f"<b>Expiry Date:</b> {expiry_str}\n\n"
+            f"<b>Your Key:</b> ||{safe_key}||",
+            parse_mode="MarkdownV2"
+        )
+    else:
+        await message.answer(
+            "❌ You are not a premium subscriber. Please subscribe to access premium features."
+        )
 
 @dp.message_handler(commands=["check"])
 async def check_subscribers(message: Message):
