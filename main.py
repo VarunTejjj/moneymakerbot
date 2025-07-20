@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 
 SUBS_FILE = "subscriptions.json"
 ADMIN_IDS = [1831313735]     # Your Telegram user ID as admin
-PUBLIC_CHANNEL_ID = -1001234567890     # Replace with your public channel's Telegram ID
+PUBLIC_CHANNEL_ID = -1002800054599     # Replace with your public channel's Telegram ID
 PREMIUM_CHANNEL_ID = -1002731631370    # Your premium channel's Telegram ID
 
 def load_subscriptions():
@@ -71,7 +71,7 @@ async def start(message: Message):
         )
     else:
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton("✨ Join Channel", url="https://t.me/+nkPAaWA1TI8xOTVl")],
+            [InlineKeyboardButton("✨ Join Channel", url="https://t.me/anythinghere07")],
             [InlineKeyboardButton("💳 Get Subscription", callback_data="subscribe")]
         ])
         await message.answer(
