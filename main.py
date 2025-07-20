@@ -145,6 +145,16 @@ async def refer_button(call: CallbackQuery):
 async def start(message: Message):
     user_id = message.from_user.id
     session_messages[user_id] = {}
+    args = message.get_args()
+    if args and args.startswith("ref") and args[3:].isdigit():
+        referrer_id = args[3:]
+        if referrer_id != str(user_id):
+            referrals = load_referrals()
+            users = referrals.get(referrer_id, [])
+            if str(user_id) not in users:
+                users.append(str(user_id))
+                referrals[referrer_id] = users
+                save_referrals(referrals)
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     if not in_channel or not in_group:
@@ -479,16 +489,18 @@ async def remove_expired_users():
             save_subscriptions(subs)
         await asyncio.sleep(3600)
 
-@dp.message_handler(commands=["refer"])
-async def refer_command(message: Message):
+@dp.message_handler(commands=["referral"])
+async def referral_info(message: Message):
     user_id = message.from_user.id
-    referral_link = f"https://t.me/{(await bot.me).username}?start=ref{user_id}"
-    text = (
-        "🔗 <b>Your Referral Link</b>:\n"
-        f"<code>{referral_link}</code>\n\n"
-        "Share this link with friends. When they join, you'll both get benefits!"
+    ref_link = f"https://t.me/{(await bot.get_me()).username}?start=ref{user_id}"
+    referrals = load_referrals()
+    referred = referrals.get(str(user_id), [])
+    await message.answer(
+        f"🚀 *Your Referral Link:*\n{ref_link}\n\n"
+        f"You've referred *{len(referred)}* friends so far.\n"
+        "Share this link: every new user who joins using it will be added to your referrals.",
+        parse_mode="Markdown"
     )
-    await message.answer(text, parse_mode="HTML")
 
 async def main():
     asyncio.create_task(remove_expired_users())
