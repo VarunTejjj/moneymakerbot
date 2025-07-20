@@ -6,3 +6,4 @@ cython
 python-dotenv
 requests
 pymongo>=4.1.0
+flask
