@@ -84,9 +84,9 @@ def back_button():
         [InlineKeyboardButton("⬅️ Back", callback_data="back_to_menu")]
     ])
 
-async def delete_user_bot_messages(chat_id, user_id):
+async def delete_user_bot_messages(chat_id):
     try:
-        async for msg in bot.iter_history(chat_id, limit=20):
+        async for msg in bot.iter_history(chat_id, limit=30):
             if msg.from_user and msg.from_user.id == (await bot.me).id:
                 try:
                     await bot.delete_message(chat_id, msg.message_id)
@@ -137,6 +137,11 @@ async def check_join(call: CallbackQuery):
     user_id = call.from_user.id
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
+    # Remove force join buttons
+    try:
+        await bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception:
+        pass
     if in_channel and in_group:
         name = call.from_user.first_name or "there"
         expiry = get_user_expiry(user_id)
@@ -230,9 +235,8 @@ async def handle_photo(message: Message):
         return
 
     # Delete previous bot messages first
-    await delete_user_bot_messages(message.chat.id, user_id)
+    await delete_user_bot_messages(message.chat.id)
     await asyncio.sleep(0.7)
-
     await message.answer("🔎 Checking your payment screenshot...")
     photo = message.photo[-1]
     file = await bot.get_file(photo.file_id)
@@ -264,6 +268,9 @@ async def handle_photo(message: Message):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)]
             ])
+            # Delete all prior bot messages before sending the final confirmation
+            await delete_user_bot_messages(message.chat.id)
+            await asyncio.sleep(0.7)
             await message.answer(
                 f"✅ <b>Payment Verified!</b>\n\n"
                 f"🔑 <b>Your Key:</b> <code>{key}</code>\n"
