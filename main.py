@@ -287,6 +287,7 @@ async def handle_photo(message: Message):
                 member_limit=1,
                 expire_date=now + 3600
             )
+            
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)],
     [InlineKeyboardButton("🚀 Lets Start", callback_data="lets_start")]
