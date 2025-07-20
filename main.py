@@ -18,6 +18,19 @@ logging.basicConfig(level=logging.INFO)
 SUBS_FILE = "subscriptions.json"
 ADMIN_IDS = [1831313735]
 
+REFERRALS_FILE = "referrals.json"
+
+def load_referrals():
+    try:
+        with open(REFERRALS_FILE, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_referrals(referrals):
+    with open(REFERRALS_FILE, 'w') as f:
+        json.dump(referrals, f)
+
 PUBLIC_CHANNEL_ID = -1002800054599
 PUBLIC_CHANNEL_LINK = "https://t.me/anythinghere07"
 FORCE_GROUP_ID = -1002718775143
