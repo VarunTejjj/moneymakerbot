@@ -176,25 +176,29 @@ async def check_join(call: CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data == "see_features")
 async def see_features(call: CallbackQuery):
-    await delete_single_message_safe(call.message.chat.id, call.message.message_id)
+    # Delete the menu message
+    await bot.delete_message(call.message.chat.id, call.message.message_id)
+    # Send features text + Back button
+    name = call.from_user.first_name or "there"
     sent = await call.message.answer(
         "Hello thier",
-        reply_markup=back_button()
+        reply_markup=InlineKeyboardMarkup().add(
+            InlineKeyboardButton("⬅️ Back", callback_data="back_to_menu")
+        )
     )
-    session_messages[call.from_user.id]['features'] = sent.message_id
+    # Track the new message_id for back cleanup if desired
 
 @dp.callback_query_handler(lambda c: c.data == "back_to_menu")
 async def back_to_menu(call: CallbackQuery):
-    await delete_single_message_safe(call.message.chat.id, call.message.message_id)
-    user_id = call.from_user.id
-    try:
-        history = [msg async for msg in bot.iter_history(call.message.chat.id, limit=2)]
-        for msg in history[1:]:
-            if msg.from_user and msg.from_user.id == user_id and msg.text and msg.text.startswith('/premem'):
-                await bot.delete_message(call.message.chat.id, msg.message_id)
-                break
-    except Exception:
-        pass
+    # Delete the features message
+    await bot.delete_message(call.message.chat.id, call.message.message_id)
+    # Send menu again
+    name = call.from_user.first_name or "there"
+    await call.message.answer(
+        f"👋 Hi <b>{name}</b>!\nWelcome to MoneyMaker Premium! 🚀\n\nUnlock exclusive tips, signals, and more.",
+        parse_mode="HTML",
+        reply_markup=premium_menu(name)
+    )
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
