@@ -75,8 +75,9 @@ def premium_menu(user_name):
         [InlineKeyboardButton("🔗 Refer & Earn", callback_data="refer")]
     ])
 
-bot_username = (await bot.me).username
-referral_link = f"https://t.me/{bot_username}?start=ref{user_id}"
+def get_referral_link(user_id):
+    return f"https://t.me/{(await bot.me).username}?start=ref{user_id}"
+# This will cause a SyntaxError!
 
 def force_join_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
