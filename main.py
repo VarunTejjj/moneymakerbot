@@ -222,17 +222,6 @@ async def back_to_menu(call: CallbackQuery):
         pass
     # Do not send any new menus or messages here
 
-        else:
-            sent = await call.message.answer(
-                f"👋 Hi <b>{name}</b>!\n"
-                "Welcome to MoneyMaker Premium! 🚀\n\n"
-                "Unlock exclusive tips, signals, and more.",
-                parse_mode="HTML",
-                reply_markup=premium_menu(name)
-            )
-        session_messages[user_id]['menu'] = sent.message_id
-        session_messages[user_id].pop('features', None)
-
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
     await call.answer()
