@@ -16,6 +16,7 @@ from subscription import generate_key
 logging.basicConfig(level=logging.INFO)
 
 SUBS_FILE = "subscriptions.json"
+ADMIN_IDS = [1831313735]  # Your Telegram user ID as admin
 
 def load_subscriptions():
     try:
@@ -42,22 +43,17 @@ dp = Dispatcher(bot)
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
-    logging.info(f"/start called by {message.from_user.id}")
-    try:
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✨ Join Channel", url="https://t.me/anythinghere07")],
-            [InlineKeyboardButton(text="💳 Get Subscription", callback_data="subscribe")]
-        ])
-        await message.answer(
-            "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
-            "Unlock exclusive tips, signals, and more.\n"
-            "Press one of the buttons below to continue.",
-            parse_mode="HTML",
-            reply_markup=keyboard
-        )
-    except Exception as e:
-        logging.error(f"Error in /start: {e}")
-        await message.answer("⚠️ An error occurred while starting. Please try again later.")
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✨ Join Channel", url="https://t.me/+nkPAaWA1TI8xOTVl")],
+        [InlineKeyboardButton(text="💳 Get Subscription", callback_data="subscribe")]
+    ])
+    await message.answer(
+        "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
+        "Unlock exclusive tips, signals, and more.\n"
+        "Press one of the buttons below to continue.",
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
@@ -120,6 +116,31 @@ async def handle_photo(message: Message):
             )
     finally:
         os.remove(tmp_path)
+
+@dp.message_handler(commands=["check"])
+async def check_subscribers(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.reply("🚫 You are not authorized to use this command.")
+        return
+
+    subs = load_subscriptions()
+    if not subs:
+        await message.reply("No users have taken the subscription yet.")
+        return
+
+    reply = "<b>Active Subscribers:</b>\n\n"
+    now = int(time.time())
+    active = 0
+    for user_id, expiry in subs.items():
+        if expiry > now:
+            dt = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+            reply += f"• <code>{user_id}</code> — expires: <b>{dt}</b>\n"
+            active += 1
+
+    if active == 0:
+        await message.reply("No active subscriptions found.", parse_mode="HTML")
+    else:
+        await message.reply(reply, parse_mode="HTML")
 
 async def main():
     logging.info("Bot is running.")
