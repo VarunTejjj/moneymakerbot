@@ -146,9 +146,11 @@ async def check_join(call: CallbackQuery):
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     await delete_single_message_safe(call.message.chat.id, call.message.message_id)
     name = call.from_user.first_name or "there"
+    user_id = call.from_user.id
     expiry = get_user_expiry(user_id)
+    now = int(time.time())
     if in_channel and in_group:
-        if expiry > time.time():
+        if expiry > now:
             sent = await call.message.answer(
                 f"🏆 Hi {name}!\n"
                 "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
@@ -176,29 +178,29 @@ async def check_join(call: CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data == "see_features")
 async def see_features(call: CallbackQuery):
-    # Delete the menu message
-    await bot.delete_message(call.message.chat.id, call.message.message_id)
-    # Send features text + Back button
-    name = call.from_user.first_name or "there"
+    await delete_single_message_safe(call.message.chat.id, call.message.message_id)
     sent = await call.message.answer(
         "Hello thier",
-        reply_markup=InlineKeyboardMarkup().add(
-            InlineKeyboardButton("⬅️ Back", callback_data="back_to_menu")
-        )
+        reply_markup=back_button()
     )
-    # Track the new message_id for back cleanup if desired
+    session_messages[call.from_user.id]['features'] = sent.message_id
 
 @dp.callback_query_handler(lambda c: c.data == "back_to_menu")
 async def back_to_menu(call: CallbackQuery):
-    # Delete the features message
-    await bot.delete_message(call.message.chat.id, call.message.message_id)
-    # Send menu again
+    await delete_single_message_safe(call.message.chat.id, call.message.message_id)
+    user_id = call.from_user.id
     name = call.from_user.first_name or "there"
-    await call.message.answer(
-        f"👋 Hi <b>{name}</b>!\nWelcome to MoneyMaker Premium! 🚀\n\nUnlock exclusive tips, signals, and more.",
+    expiry = get_user_expiry(user_id)
+    now = int(time.time())
+    # Back button only shows menu again for "See Premium Features", not for /premem
+    sent = await call.message.answer(
+        f"👋 Hi <b>{name}</b>!\n"
+        "Welcome to MoneyMaker Premium! 🚀\n\n"
+        "Unlock exclusive tips, signals, and more.",
         parse_mode="HTML",
         reply_markup=premium_menu(name)
     )
+    session_messages[user_id]['menu'] = sent.message_id
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
@@ -244,6 +246,7 @@ async def handle_photo(message: Message):
         )
         session_messages[user_id]['menu'] = sent.message_id
         return
+
     checking_msg = await message.answer("🔎 Checking your payment screenshot...")
     session_messages[user_id]['checking'] = checking_msg.message_id
     photo = message.photo[-1]
@@ -276,12 +279,10 @@ async def handle_photo(message: Message):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)]
             ])
+            # Also remove /start message if present
             msg_ids = [v for k, v in session_messages[user_id].items() if k in ('menu', 'payment', 'checking', 'screenshot', 'start_cmd')]
             await delete_messages_list(message.chat.id, msg_ids)
-            try:
-                await bot.delete_message(message.chat.id, session_messages[user_id].get('start_cmd'))
-            except Exception:
-                pass
+            session_messages[user_id] = {}
             await message.answer(
                 f"✅ <b>Payment Verified!</b>\n\n"
                 f"🔑 <b>Your Key:</b> <code>{key}</code>\n"
@@ -290,7 +291,6 @@ async def handle_photo(message: Message):
                 parse_mode="HTML",
                 reply_markup=keyboard
             )
-            session_messages[user_id] = {}
         else:
             try:
                 await bot.delete_message(message.chat.id, checking_msg.message_id)
