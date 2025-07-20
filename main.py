@@ -85,7 +85,6 @@ def back_button():
     ])
 
 async def delete_user_bot_messages(chat_id, user_id):
-    # Delete bot messages for a user in a private chat
     try:
         async for msg in bot.iter_history(chat_id, limit=20):
             if msg.from_user and msg.from_user.id == (await bot.me).id:
@@ -167,7 +166,11 @@ async def check_join(call: CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data == "see_features")
 async def see_features(call: CallbackQuery):
-    m = await call.message.answer(
+    try:
+        await bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception:
+        pass
+    await call.message.answer(
         "Hello thier",
         reply_markup=back_button()
     )
@@ -180,9 +183,7 @@ async def back_to_menu(call: CallbackQuery):
         pass
     name = call.from_user.first_name or "there"
     await call.message.answer(
-        f"👋 Hi <b>{name}</b>!\n"
-        "Welcome to MoneyMaker Premium! 🚀\n\n"
-        "Unlock exclusive tips, signals, and more.",
+        f"👋 Hi <b>{name}</b>!\nWelcome to MoneyMaker Premium! 🚀\n\nUnlock exclusive tips, signals, and more.",
         parse_mode="HTML",
         reply_markup=premium_menu(name)
     )
@@ -228,12 +229,11 @@ async def handle_photo(message: Message):
         )
         return
 
-    # Delete all bot messages except soon-to-be-sent payment result
+    # Delete previous bot messages first
     await delete_user_bot_messages(message.chat.id, user_id)
-    await asyncio.sleep(0.7)  # Brief pause to ensure clears
+    await asyncio.sleep(0.7)
 
     await message.answer("🔎 Checking your payment screenshot...")
-
     photo = message.photo[-1]
     file = await bot.get_file(photo.file_id)
     file_path = file.file_path
@@ -248,7 +248,6 @@ async def handle_photo(message: Message):
             expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
             name = message.from_user.first_name or "Unknown"
             set_user_subscription(user_id, key, expiry, name)
-            # Announce only in group
             try:
                 await bot.send_message(
                     chat_id=FORCE_GROUP_ID,
