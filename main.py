@@ -6,7 +6,7 @@ import json
 import logging
 
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Message, CallbackQuery
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery
 from aiogram.dispatcher.filters import Command
 
 from config import BOT_TOKEN, UPI_ID, UPI_NAME, KEY_VALIDITY_DAYS
@@ -29,13 +29,21 @@ def save_subscriptions(subs):
     with open(SUBS_FILE, 'w') as f:
         json.dump(subs, f)
 
-def get_user_expiry(user_id):
+def get_user_record(user_id):
     subs = load_subscriptions()
-    return subs.get(str(user_id), 0)
+    return subs.get(str(user_id), {})
 
-def set_user_subscription(user_id, expiry):
+def get_user_expiry(user_id):
+    entry = get_user_record(user_id)
+    return entry.get("expiry", 0)
+
+def get_user_key(user_id):
+    entry = get_user_record(user_id)
+    return entry.get("key", None)
+
+def set_user_subscription(user_id, key, expiry):
     subs = load_subscriptions()
-    subs[str(user_id)] = expiry
+    subs[str(user_id)] = {"key": key, "expiry": expiry}
     save_subscriptions(subs)
 
 bot = Bot(token=BOT_TOKEN)
@@ -43,11 +51,14 @@ dp = Dispatcher(bot)
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
+    logging.info(f"/start called by {message.from_user.id}")
+    name = message.from_user.first_name or "there"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✨ Join Channel", url="https://t.me/+nkPAaWA1TI8xOTVl")],
         [InlineKeyboardButton(text="💳 Get Subscription", callback_data="subscribe")]
     ])
     await message.answer(
+        f"👋 <b>Hi {name}!</b>\n"
         "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
         "Unlock exclusive tips, signals, and more.\n"
         "Press one of the buttons below to continue.",
@@ -61,11 +72,15 @@ async def subscribe_instruction(call: CallbackQuery):
     user_id = call.from_user.id
     now = int(time.time())
     expiry = get_user_expiry(user_id)
-    if expiry > now:
+    key = get_user_key(user_id)
+    if expiry > now and key:
         expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+        purchase_str = datetime.datetime.fromtimestamp(expiry - KEY_VALIDITY_DAYS*24*60*60).strftime('%Y-%m-%d %H:%M:%S')
         await call.message.answer(
-            f"🛡️ <b>You already have a valid subscription!</b>\n\n"
-            f"Your access will expire on: <b>{expiry_str}</b>",
+            f"🟢 <b>You have an active subscription!</b>\n\n"
+            f"<b>Key:</b> <code>{key}</code>\n"
+            f"<b>Purchased:</b> {purchase_str}\n"
+            f"<b>Expires:</b> {expiry_str}",
             parse_mode="HTML"
         )
     else:
@@ -92,7 +107,7 @@ async def handle_photo(message: Message):
             key = generate_key()
             now = int(time.time())
             expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
-            set_user_subscription(message.from_user.id, expiry)
+            set_user_subscription(message.from_user.id, key, expiry)
             invite = await bot.create_chat_invite_link(
                 chat_id=-1002731631370,
                 member_limit=1,
@@ -131,10 +146,12 @@ async def check_subscribers(message: Message):
     reply = "<b>Active Subscribers:</b>\n\n"
     now = int(time.time())
     active = 0
-    for user_id, expiry in subs.items():
+    for user_id, record in subs.items():
+        expiry = record.get("expiry", 0)
+        key = record.get("key", "N/A")
         if expiry > now:
             dt = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
-            reply += f"• <code>{user_id}</code> — expires: <b>{dt}</b>\n"
+            reply += f"• <code>{user_id}</code> — key: <code>{key}</code> — expires: <b>{dt}</b>\n"
             active += 1
 
     if active == 0:
