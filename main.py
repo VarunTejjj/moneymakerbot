@@ -75,10 +75,6 @@ def premium_menu(user_name):
         [InlineKeyboardButton("🔗 Refer & Earn", callback_data="refer")]
     ])
 
-def get_referral_link(user_id):
-    return f"https://t.me/{(await bot.me).username}?start=ref{user_id}"
-# This will cause a SyntaxError!
-
 def force_join_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton("Join Channel 📢", url=PUBLIC_CHANNEL_LINK)],
@@ -90,6 +86,10 @@ def back_button():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton("⬅️ Back", callback_data="back_to_menu")]
     ])
+
+async def get_referral_link(user_id):
+    username = (await bot.me).username
+    return f"https://t.me/{username}?start=ref{user_id}"
 
 async def delete_single_message_safe(chat_id, message_id):
     try:
