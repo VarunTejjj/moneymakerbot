@@ -4,6 +4,7 @@ import time
 import datetime
 import json
 import logging
+import re
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery
@@ -16,7 +17,7 @@ from subscription import generate_key
 logging.basicConfig(level=logging.INFO)
 
 SUBS_FILE = "subscriptions.json"
-ADMIN_IDS = [1831313735]  # Your Telegram user ID as admin
+ADMIN_IDS = [1831313735]  # Your admin user ID
 
 def load_subscriptions():
     try:
@@ -45,6 +46,10 @@ def set_user_subscription(user_id, key, expiry):
     subs = load_subscriptions()
     subs[str(user_id)] = {"key": key, "expiry": expiry}
     save_subscriptions(subs)
+
+def escape_markdown(text):
+    # Escapes all special MarkdownV2 characters
+    return re.sub(r'([_*\[\]()~`>#+\-=|{}.!\\])', r'\\\1', text)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
@@ -154,13 +159,12 @@ async def premium_member(message: Message):
         purchase_time = expiry - KEY_VALIDITY_DAYS * 24 * 60 * 60
         purchase_str = datetime.datetime.fromtimestamp(purchase_time).strftime('%Y-%m-%d %H:%M:%S')
         expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
-        # Use MarkdownV2 for spoiler (||text||) support
-        safe_key = key.replace("_", "\\_").replace("-", "\\-")
+        key_md = escape_markdown(key)
         await message.answer(
             "<b>👤 Premium Subscription Details</b>\n\n"
             f"<b>Purchase Date:</b> {purchase_str}\n"
             f"<b>Expiry Date:</b> {expiry_str}\n\n"
-            f"<b>Your Key:</b> ||{safe_key}||",
+            f"<b>Your Key:</b> ||{key_md}||",
             parse_mode="MarkdownV2"
         )
     else:
