@@ -44,14 +44,17 @@ dp = Dispatcher(bot)
 async def start(message: Message):
     logging.info(f"/start used by {message.from_user.id}")
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Join Channel", url="https://t.me/yourpublicchannel")],
-        [InlineKeyboardButton(text="💰 Take Subscription", callback_data="subscribe")]
+        [InlineKeyboardButton(text="ðŸ“¢ Join Channel", url="https://t.me/yourpublicchannel")],
+        [InlineKeyboardButton(text="ðŸ’° Take Subscription", callback_data="subscribe")]
     ])
     await message.answer("Welcome! Choose an option below:", reply_markup=keyboard)
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
+    print("ðŸ’° 'Take Subscription' button clicked by:", call.from_user.id)
     try:
+        await call.answer()
+
         await call.answer()
     except Exception as e:
         logging.warning(f"Failed to answer callback: {e}")
@@ -62,14 +65,14 @@ async def subscribe_instruction(call: CallbackQuery):
     if expiry > now:
         expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
         await call.message.answer(
-            f"🛡️ You already have a valid subscription!\n\n"
+            f"ðŸ›¡ï¸ You already have a valid subscription!\n\n"
             f"Your access will expire on: <b>{expiry_str}</b>",
             parse_mode="HTML"
         )
     else:
         await call.message.answer(
             "To get 7 days premium access:\n\n"
-            f"**Pay ₹5** to the UPI ID:\n"
+            f"**Pay â‚¹5** to the UPI ID:\n"
             f"`{UPI_ID}`\n"
             f"Name: *{UPI_NAME}*\n\n"
             "Then send your payment screenshot here.",
@@ -100,10 +103,10 @@ async def handle_photo(message: Message):
                 expire_date=now + 3600
             )
             await message.answer(
-                f"✅ Payment Verified!\n\n"
-                f"🔑 Your Key: `{key}`\n"
-                f"📥 [Tap here to join the private channel]({invite.invite_link})\n"
-                f"⚠️ This link can only be used once and will expire in 1 hour.",
+                f"âœ… Payment Verified!\n\n"
+                f"ðŸ”‘ Your Key: `{key}`\n"
+                f"ðŸ“¥ [Tap here to join the private channel]({invite.invite_link})\n"
+                f"âš ï¸ This link can only be used once and will expire in 1 hour.",
                 parse_mode=ParseMode.MARKDOWN
             )
             async def delayed_revoke():
@@ -117,7 +120,7 @@ async def handle_photo(message: Message):
                     logging.warning(f"Failed to revoke invite: {e}")
             asyncio.create_task(delayed_revoke())
         else:
-            await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
+            await message.answer("âŒ Screenshot is invalid. Please send a valid UPI payment screenshot.")
     except Exception as e:
         logging.error(f"Error in handle_photo: {e}")
         await message.answer("An error occurred while checking your screenshot. Please try again.")
