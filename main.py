@@ -49,6 +49,10 @@ def get_user_key(user_id):
     record = get_user_record(user_id)
     return record.get("key", None)
 
+def get_user_name(user_id):
+    record = get_user_record(user_id)
+    return record.get("name", "Unknown")
+
 def set_user_subscription(user_id, key, expiry, name):
     subs = load_subscriptions()
     subs[str(user_id)] = {"key": key, "expiry": expiry, "name": name}
@@ -64,7 +68,7 @@ async def is_member(bot, user_id, chat_id):
     except Exception:
         return False
 
-def premium_menu():
+def premium_menu(user_name):
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton("💳 Take Subscription", callback_data="subscribe")],
         [InlineKeyboardButton("👁️‍🗨️ See Premium Features", callback_data="see_features")]
@@ -130,7 +134,7 @@ async def start(message: Message):
             "Welcome to MoneyMaker Premium! 🚀\n\n"
             "Unlock exclusive tips, signals, and more.",
             parse_mode="HTML",
-            reply_markup=premium_menu()
+            reply_markup=premium_menu(name)
         )
         session_messages[user_id]['menu'] = sent.message_id
         session_messages[user_id]['start_cmd'] = message.message_id
@@ -142,6 +146,7 @@ async def check_join(call: CallbackQuery):
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     await delete_single_message_safe(call.message.chat.id, call.message.message_id)
     name = call.from_user.first_name or "there"
+    user_id = call.from_user.id
     expiry = get_user_expiry(user_id)
     now = int(time.time())
     if in_channel and in_group:
@@ -161,7 +166,7 @@ async def check_join(call: CallbackQuery):
                 "Welcome to MoneyMaker Premium! 🚀\n\n"
                 "Unlock exclusive tips, signals, and more.",
                 parse_mode="HTML",
-                reply_markup=premium_menu()
+                reply_markup=premium_menu(name)
             )
             session_messages[user_id]['menu'] = sent.message_id
     else:
@@ -174,15 +179,17 @@ async def check_join(call: CallbackQuery):
 @dp.callback_query_handler(lambda c: c.data == "see_features")
 async def see_features(call: CallbackQuery):
     await delete_single_message_safe(call.message.chat.id, call.message.message_id)
-    sent = await call.message.answer("Hello thier", reply_markup=back_button())
+    sent = await call.message.answer(
+        "Hello thier",
+        reply_markup=back_button()
+    )
     session_messages[call.from_user.id]['features'] = sent.message_id
 
 @dp.callback_query_handler(lambda c: c.data == "back_to_menu")
 async def back_to_menu(call: CallbackQuery):
-    user_id = call.from_user.id
     await delete_single_message_safe(call.message.chat.id, call.message.message_id)
-    # Only show menu again if user returned from "see_features", NOT after /premem
-    if session_messages.get(user_id, {}).get('features'):
+    user_id = call.from_user.id
+    if 'features' in session_messages.get(user_id, {}):
         name = call.from_user.first_name or "there"
         expiry = get_user_expiry(user_id)
         now = int(time.time())
@@ -195,16 +202,15 @@ async def back_to_menu(call: CallbackQuery):
                 "Use <b>/premem</b> anytime to view your subscription details and key.",
                 parse_mode="HTML"
             )
-            session_messages[user_id]['menu'] = sent.message_id
         else:
             sent = await call.message.answer(
                 f"👋 Hi <b>{name}</b>!\n"
                 "Welcome to MoneyMaker Premium! 🚀\n\n"
                 "Unlock exclusive tips, signals, and more.",
                 parse_mode="HTML",
-                reply_markup=premium_menu()
+                reply_markup=premium_menu(name)
             )
-            session_messages[user_id]['menu'] = sent.message_id
+        session_messages[user_id]['menu'] = sent.message_id
         session_messages[user_id].pop('features', None)
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
@@ -251,9 +257,9 @@ async def handle_photo(message: Message):
         )
         session_messages[user_id]['menu'] = sent.message_id
         return
-
     checking_msg = await message.answer("🔎 Checking your payment screenshot...")
     session_messages[user_id]['checking'] = checking_msg.message_id
+
     photo = message.photo[-1]
     file = await bot.get_file(photo.file_id)
     file_path = file.file_path
@@ -284,7 +290,6 @@ async def handle_photo(message: Message):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)]
             ])
-            # Delete menu, payment instr, checking, screenshot, and start command if present
             msg_ids = [v for k, v in session_messages[user_id].items() if k in ('menu', 'payment', 'checking', 'screenshot', 'start_cmd')]
             await delete_messages_list(message.chat.id, msg_ids)
             try:
@@ -315,12 +320,12 @@ async def handle_photo(message: Message):
 @dp.message_handler(commands=["premem"])
 async def premium_member(message: Message):
     try:
-        history = [msg async for msg in bot.iter_history(message.chat.id, limit=3)]
-        for msg in history[1:]:
-            if msg.from_user and msg.from_user.id == (await bot.me).id:
-                await bot.delete_message(message.chat.id, msg.message_id)
-                break
-        await bot.delete_message(message.chat.id, message.message_id)
+        history = [msg async for msg in bot.iter_history(message.chat.id, limit=2)]
+        if len(history) == 2:
+            prev_msg = history[1]
+            await delete_single_message_safe(message.chat.id, prev_msg.message_id)
+        await delete_single_message_safe(message.chat.id, message.message_id)
+        return
     except Exception:
         pass
     user_id = message.from_user.id
@@ -451,7 +456,9 @@ async def remove_expired_users():
         if updated:
             save_subscriptions(subs)
         await asyncio.sleep(3600)
+
 async def main():
+    asyncio.create_task(remove_expired_users())
     logging.info("Bot is running.")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
