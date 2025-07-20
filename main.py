@@ -46,7 +46,7 @@ async def start(message: Message):
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
-    await call.answer()  # Always answer callback to avoid Telegram UI issues
+    await call.answer()  # Always answer the callback to close the Telegram "loading" animation
     user_id = call.from_user.id
     now = int(time.time())
     expiry = get_user_expiry(user_id)
