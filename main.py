@@ -66,7 +66,7 @@ async def is_member(bot, user_id, chat_id):
     except Exception:
         return False
 
-def premium_menu():
+def premium_menu(user_name):
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton("💳 Take Subscription", callback_data="subscribe")],
         [InlineKeyboardButton("👁️‍🗨️ See Premium Features", callback_data="see_features")]
@@ -83,6 +83,18 @@ def back_button():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton("⬅️ Back", callback_data="back_to_menu")]
     ])
+
+async def delete_user_bot_messages(chat_id, user_id):
+    # Delete bot messages for a user in a private chat
+    try:
+        async for msg in bot.iter_history(chat_id, limit=20):
+            if msg.from_user and msg.from_user.id == (await bot.me).id:
+                try:
+                    await bot.delete_message(chat_id, msg.message_id)
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
@@ -114,12 +126,11 @@ async def start(message: Message):
         )
     else:
         await message.answer(
-            f"👋 <b>Hi {name}!</b>\n"
-            "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
-            "Unlock exclusive tips, signals, and more.\n"
-            "Select an option below.",
+            f"👋 Hi <b>{name}</b>!\n"
+            "Welcome to MoneyMaker Premium! 🚀\n\n"
+            "Unlock exclusive tips, signals, and more.",
             parse_mode="HTML",
-            reply_markup=premium_menu()
+            reply_markup=premium_menu(name)
         )
 
 @dp.callback_query_handler(lambda c: c.data == "check_join")
@@ -142,9 +153,11 @@ async def check_join(call: CallbackQuery):
             )
         else:
             await call.message.answer(
-                "Select an option below.",
+                f"👋 Hi <b>{name}</b>!\n"
+                "Welcome to MoneyMaker Premium! 🚀\n\n"
+                "Unlock exclusive tips, signals, and more.",
                 parse_mode="HTML",
-                reply_markup=premium_menu()
+                reply_markup=premium_menu(name)
             )
     else:
         await call.message.answer(
@@ -152,21 +165,26 @@ async def check_join(call: CallbackQuery):
             reply_markup=force_join_menu()
         )
 
-@dp.callback_query_handler(lambda c: c.data == "back_to_menu")
-async def back_to_menu(call: CallbackQuery):
-    await call.message.delete()
-    await call.message.answer(
-        "Select an option below.",
-        parse_mode="HTML",
-        reply_markup=premium_menu()
-    )
-
 @dp.callback_query_handler(lambda c: c.data == "see_features")
 async def see_features(call: CallbackQuery):
-    await call.answer()
-    await call.message.answer(
-        "Hello thier",  # Replace with your real premium features message as desired.
+    m = await call.message.answer(
+        "Hello thier",
         reply_markup=back_button()
+    )
+
+@dp.callback_query_handler(lambda c: c.data == "back_to_menu")
+async def back_to_menu(call: CallbackQuery):
+    try:
+        await bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception:
+        pass
+    name = call.from_user.first_name or "there"
+    await call.message.answer(
+        f"👋 Hi <b>{name}</b>!\n"
+        "Welcome to MoneyMaker Premium! 🚀\n\n"
+        "Unlock exclusive tips, signals, and more.",
+        parse_mode="HTML",
+        reply_markup=premium_menu(name)
     )
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
@@ -210,7 +228,12 @@ async def handle_photo(message: Message):
         )
         return
 
+    # Delete all bot messages except soon-to-be-sent payment result
+    await delete_user_bot_messages(message.chat.id, user_id)
+    await asyncio.sleep(0.7)  # Brief pause to ensure clears
+
     await message.answer("🔎 Checking your payment screenshot...")
+
     photo = message.photo[-1]
     file = await bot.get_file(photo.file_id)
     file_path = file.file_path
@@ -292,7 +315,6 @@ async def check_subscribers(message: Message):
         return
     reply = "<b>Active Subscribers:</b>\n\n"
     now = int(time.time())
-    active = 0
     for user_id, record in subs.items():
         expiry = record.get("expiry", 0)
         key = record.get("key", "N/A")
@@ -303,11 +325,7 @@ async def check_subscribers(message: Message):
                 f"• <code>{user_id}</code> — <b>{name}</b> — "
                 f"key: <code>{key}</code> — expires: <b>{dt}</b>\n"
             )
-            active += 1
-    if active == 0:
-        await message.reply("No active subscriptions found.", parse_mode="HTML")
-    else:
-        await message.reply(reply, parse_mode="HTML")
+    await message.reply(reply, parse_mode="HTML")
 
 @dp.message_handler(commands=["extend"])
 async def extend_sub(message: Message):
