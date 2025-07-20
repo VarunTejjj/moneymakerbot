@@ -135,20 +135,17 @@ async def refer_button(call: CallbackQuery):
     bot_info = await bot.get_me()
     referral_link = f"https://t.me/{bot_info.username}?start=ref{user_id}"
 
-    # Load referral points (assume you store in referrals.json)
     referrals = load_referrals()
-    points = len(referrals.get(str(user_id), {}).get("referrals", []))  # 1 point per invited user
+    points = len(referrals.get(str(user_id), {}).get("referrals", []))
 
-    # Compose dashboard message
     text = (
         f"👤 <b>Name:</b> {call.from_user.first_name}\n"
         f"🔗 <b>Your Referral Link:</b>\n<code>{referral_link}</code>\n\n"
         f"🏅 <b>Referral Points:</b> {points}\n\n"
-        "Earn 1 point for every user who joins the bot using your link. "
-        "Redeem 5 points for 2 extra days of subscription!"
+        "Earn 1 point for every friend who joins using your link. "
+        "Redeem 5 points for 2 days of premium!"
     )
 
-    # Inline Redeem button, only if 5+ points
     if points >= 5:
         markup = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -163,7 +160,6 @@ async def refer_button(call: CallbackQuery):
             ]
         )
 
-    # Clean up previous message, then show dashboard
     await bot.delete_message(call.message.chat.id, call.message.message_id)
     await call.message.answer(text, reply_markup=markup, parse_mode="HTML")
 
@@ -171,12 +167,12 @@ async def refer_button(call: CallbackQuery):
 async def redeem_points(call: CallbackQuery):
     user_id = str(call.from_user.id)
     referrals = load_referrals()
-    if len(referrals.get(user_id, {}).get("referrals", [])) >= 5:
-        # Deduct 5 points and grant 2 days premium
+    points = len(referrals.get(user_id, {}).get("referrals", []))
+
+    if points >= 5:
         referrals[user_id]["referrals"] = referrals[user_id]["referrals"][5:]
         save_referrals(referrals)
 
-        # Extend premium (update subscriptions.json accordingly)
         subs = load_subscriptions()
         record = subs.get(user_id, {})
         expiry = max(int(time.time()), record.get("expiry", 0)) + 2*86400
@@ -186,11 +182,10 @@ async def redeem_points(call: CallbackQuery):
 
         await bot.delete_message(call.message.chat.id, call.message.message_id)
         await call.message.answer(
-            "🎉 You have redeemed 5 referral points for 2 extra days of premium!\n"
-            "Thank you for inviting friends to MoneyMaker Premium."
+            "🎉 You redeemed 5 points for 2 days of premium! Your upgrade is active."
         )
     else:
-        await call.answer("You need at least 5 referral points to redeem.", show_alert=True)
+        await call.answer("You need at least 5 points to redeem.", show_alert=True)
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
