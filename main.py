@@ -81,22 +81,42 @@ async def handle_photo(message: Message):
     with open(tmp_path, "wb") as f:
         f.write(image_data.read())
 
-    if check_screenshot(tmp_path):
-        key = generate_key()
-        now = int(time.time())
-        expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
-        set_user_subscription(message.from_user.id, expiry)
-        await message.answer(
-            f"✅ Payment Verified!\n\n"
-            f"🔑 Your Key: `{key}`\n"
-            f"📥 [Tap here to join the private channel](https://t.me/+nkPAaWA1TI8xOTVl)\n"
-            f"⚠️ Keep your code safe for website use. This key gives you full access for 7 days.",
-            parse_mode=ParseMode.MARKDOWN
-        )
-    else:
-        await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
+    try:
+        if check_screenshot(tmp_path):
+            key = generate_key()
+            now = int(time.time())
+            expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
+            set_user_subscription(message.from_user.id, expiry)
 
-    os.remove(tmp_path)
+            # Generate secure, time-limited, one-time invite link
+            invite = await bot.create_chat_invite_link(
+                chat_id=-1002731631370,  # Your private channel ID
+                member_limit=1,          # Only 1 person can join
+                expire_date=now + 3600   # Link expires in 1 hour
+            )
+
+            await message.answer(
+                f"✅ Payment Verified!\n\n"
+                f"🔑 Your Key: `{key}`\n"
+                f"📥 [Tap here to join the private channel]({invite.invite_link})\n"
+                f"⚠️ This link can only be used once and will expire in 1 hour.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+
+            async def delayed_revoke():
+                await asyncio.sleep(600)
+                try:
+                    await bot.revoke_chat_invite_link(
+                        chat_id=-1002731631370,
+                        invite_link=invite.invite_link
+                    )
+                except Exception as e:
+                    logging.warning(f"Failed to revoke invite: {e}")
+            asyncio.create_task(delayed_revoke())
+        else:
+            await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
+    finally:
+        os.remove(tmp_path)
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
