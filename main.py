@@ -24,6 +24,8 @@ FORCE_GROUP_ID = -1002718775143
 FORCE_GROUP_LINK = "https://t.me/+37DfTLNkfcwwZDhl"
 PREMIUM_CHANNEL_ID = -1002731631370
 
+session_messages = {}
+
 def load_subscriptions():
     try:
         with open(SUBS_FILE, 'r') as f:
@@ -91,27 +93,13 @@ async def delete_specific_messages(chat_id, message_ids):
         except Exception:
             pass
 
-async def delete_bot_and_user_messages(chat_id, from_id):
-    try:
-        to_del = []
-        async for msg in bot.iter_history(chat_id, limit=30):
-            if msg.from_user and (msg.from_user.id == (await bot.me).id or (msg.from_user.id == from_id and msg.content_type == 'photo')):
-                to_del.append(msg.message_id)
-        for mid in to_del:
-            try:
-                await bot.delete_message(chat_id, mid)
-            except Exception:
-                pass
-    except Exception:
-        pass
-
 @dp.message_handler(Command("start"))
 async def start(message: Message):
     user_id = message.from_user.id
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     if not in_channel or not in_group:
-        await message.answer(
+        sent = await message.answer(
             "🚀 To continue, join BOTH our official channel and group:\n\n"
             f"1️⃣ [Join Channel]({PUBLIC_CHANNEL_LINK})\n"
             f"2️⃣ [Join Group]({FORCE_GROUP_LINK})\n\n"
@@ -119,13 +107,14 @@ async def start(message: Message):
             parse_mode="Markdown",
             reply_markup=force_join_menu()
         )
+        session_messages[user_id] = {'menu': sent.message_id}
         return
 
     name = message.from_user.first_name or "there"
     expiry = get_user_expiry(user_id)
     now = int(time.time())
     if expiry > now:
-        await message.answer(
+        sent = await message.answer(
             f"🏆 Hi {name}!\n"
             "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
             "<code>✨ PREMIUM SUBSCRIBER</code> ✅\n\n"
@@ -133,14 +122,16 @@ async def start(message: Message):
             "Use <b>/premem</b> anytime to view your subscription details and key.",
             parse_mode="HTML"
         )
+        session_messages[user_id] = {'menu': sent.message_id}
     else:
-        await message.answer(
+        sent = await message.answer(
             f"👋 Hi <b>{name}</b>!\n"
             "Welcome to MoneyMaker Premium! 🚀\n\n"
             "Unlock exclusive tips, signals, and more.",
             parse_mode="HTML",
             reply_markup=premium_menu(name)
         )
+        session_messages[user_id] = {'menu': sent.message_id}
 
 @dp.callback_query_handler(lambda c: c.data == "check_join")
 async def check_join(call: CallbackQuery):
@@ -151,12 +142,13 @@ async def check_join(call: CallbackQuery):
         await bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
         pass
+    name = call.from_user.first_name or "there"
+    user_id = call.from_user.id
+    expiry = get_user_expiry(user_id)
+    now = int(time.time())
     if in_channel and in_group:
-        name = call.from_user.first_name or "there"
-        expiry = get_user_expiry(user_id)
-        now = int(time.time())
         if expiry > now:
-            await call.message.answer(
+            sent = await call.message.answer(
                 f"🏆 Hi {name}!\n"
                 "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
                 "<code>✨ PREMIUM SUBSCRIBER</code> ✅\n\n"
@@ -164,19 +156,22 @@ async def check_join(call: CallbackQuery):
                 "Use <b>/premem</b> anytime to view your subscription details and key.",
                 parse_mode="HTML"
             )
+            session_messages[user_id] = {'menu': sent.message_id}
         else:
-            await call.message.answer(
+            sent = await call.message.answer(
                 f"👋 Hi <b>{name}</b>!\n"
                 "Welcome to MoneyMaker Premium! 🚀\n\n"
                 "Unlock exclusive tips, signals, and more.",
                 parse_mode="HTML",
                 reply_markup=premium_menu(name)
             )
+            session_messages[user_id] = {'menu': sent.message_id}
     else:
-        await call.message.answer(
+        sent = await call.message.answer(
             "❗ You must join both the channel and group to continue.",
             reply_markup=force_join_menu()
         )
+        session_messages[user_id] = {'menu': sent.message_id}
 
 @dp.callback_query_handler(lambda c: c.data == "see_features")
 async def see_features(call: CallbackQuery):
@@ -184,10 +179,11 @@ async def see_features(call: CallbackQuery):
         await bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
         pass
-    await call.message.answer(
+    sent = await call.message.answer(
         "Hello thier",
         reply_markup=back_button()
     )
+    session_messages[call.from_user.id]['features'] = sent.message_id
 
 @dp.callback_query_handler(lambda c: c.data == "back_to_menu")
 async def back_to_menu(call: CallbackQuery):
@@ -195,12 +191,7 @@ async def back_to_menu(call: CallbackQuery):
         await bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
         pass
-    name = call.from_user.first_name or "there"
-    await call.message.answer(
-        f"👋 Hi <b>{name}</b>!\nWelcome to MoneyMaker Premium! 🚀\n\nUnlock exclusive tips, signals, and more.",
-        parse_mode="HTML",
-        reply_markup=premium_menu(name)
-    )
+    # No menu sent here after /premem back (chat is left clear)
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
@@ -214,7 +205,7 @@ async def subscribe_instruction(call: CallbackQuery):
         name = record.get("name", call.from_user.first_name or "Unknown")
         expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
         purchase_str = datetime.datetime.fromtimestamp(expiry - KEY_VALIDITY_DAYS * 24 * 60 * 60).strftime('%Y-%m-%d %H:%M:%S')
-        await call.message.answer(
+        sent = await call.message.answer(
             f"🟢 <b>You have an active subscription!</b>\n\n"
             f"<b>Name:</b> {name}\n"
             f"<b>Key:</b> <code>{key}</code>\n"
@@ -222,29 +213,33 @@ async def subscribe_instruction(call: CallbackQuery):
             f"<b>Expires:</b> {expiry_str}",
             parse_mode="HTML"
         )
+        session_messages[user_id]['menu'] = sent.message_id
     else:
-        menu_msg = await call.message.answer(
+        instr = await call.message.answer(
             f"To get <b>7 days of premium access</b>:\n\n"
             f"💸 <b>Pay ₹5</b> UPI: <code>{UPI_ID}</code>\n"
             f"Name: <b>{UPI_NAME}</b>\n\n"
             "Then send your payment screenshot here.",
             parse_mode="HTML"
         )
-        # Optionally store menu_msg.message_id for deletion
+        session_messages.setdefault(user_id, {})['payment'] = instr.message_id
 
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
     user_id = message.from_user.id
+    session_messages.setdefault(user_id, {})['screenshot'] = message.message_id
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     if not in_channel or not in_group:
-        await message.answer(
+        sent = await message.answer(
             "❗ You must join both the channel and group before sending a screenshot.",
             reply_markup=force_join_menu()
         )
+        session_messages[user_id]['menu'] = sent.message_id
         return
-
     checking_msg = await message.answer("🔎 Checking your payment screenshot...")
+    session_messages[user_id]['checking'] = checking_msg.message_id
+
     photo = message.photo[-1]
     file = await bot.get_file(photo.file_id)
     file_path = file.file_path
@@ -265,8 +260,8 @@ async def handle_photo(message: Message):
                     text=f"🌟 User <b>{name}</b> (ID: <code>{user_id}</code>) just unlocked MoneyMaker Premium! 🎉\nWelcome to the VIP circle!",
                     parse_mode="HTML"
                 )
-            except Exception as e:
-                logging.warning(f"Group announcement failed: {e}")
+            except Exception:
+                pass
             invite = await bot.create_chat_invite_link(
                 chat_id=PREMIUM_CHANNEL_ID,
                 member_limit=1,
@@ -275,19 +270,8 @@ async def handle_photo(message: Message):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)]
             ])
-            # Delete the checking_msg, user's screenshot photo, and prior bot menus/instructions
-            await asyncio.sleep(0.5)
-            try:
-                await bot.delete_message(message.chat.id, checking_msg.message_id)
-            except Exception:
-                pass
-            try:
-                await bot.delete_message(message.chat.id, message.message_id)
-            except Exception:
-                pass
-            # Clean up previous up-to-20 bot messages (menus/instructions)
-            await delete_bot_and_user_messages(message.chat.id, message.from_user.id)
-            await asyncio.sleep(0.3)
+            msg_ids = [v for k, v in session_messages[user_id].items() if k in ('menu', 'payment', 'checking', 'screenshot')]
+            await delete_specific_messages(message.chat.id, msg_ids)
             await message.answer(
                 f"✅ <b>Payment Verified!</b>\n\n"
                 f"🔑 <b>Your Key:</b> <code>{key}</code>\n"
@@ -296,6 +280,7 @@ async def handle_photo(message: Message):
                 parse_mode="HTML",
                 reply_markup=keyboard
             )
+            session_messages[user_id] = {}
         else:
             try:
                 await bot.delete_message(message.chat.id, checking_msg.message_id)
@@ -310,12 +295,13 @@ async def handle_photo(message: Message):
 
 @dp.message_handler(commands=["premem"])
 async def premium_member(message: Message):
-    # Remove the previous message in chat ("menu" or features, etc) before showing details
+    # Remove previous bot message before details
     try:
         history = [msg async for msg in bot.iter_history(message.chat.id, limit=2)]
         if len(history) == 2:
             prev_msg = history[1]
-            await bot.delete_message(message.chat.id, prev_msg.message_id)
+            if prev_msg.from_user and prev_msg.from_user.id == (await bot.me).id:
+                await bot.delete_message(message.chat.id, prev_msg.message_id)
     except Exception:
         pass
     user_id = message.from_user.id
@@ -335,6 +321,7 @@ async def premium_member(message: Message):
             parse_mode="HTML",
             reply_markup=back_button()
         )
+        session_messages[user_id]['premem'] = sent.message_id
     else:
         await message.answer(
             "❌ You are not a premium subscriber. Please subscribe to access premium features."
@@ -346,36 +333,6 @@ async def back_to_menu(call: CallbackQuery):
         await bot.delete_message(call.message.chat.id, call.message.message_id)
     except Exception:
         pass
-    name = call.from_user.first_name or "there"
-    user_id = call.from_user.id
-    expiry = get_user_expiry(user_id)
-    now = int(time.time())
-    if expiry > now:
-        await call.message.answer(
-            f"🏆 Hi {name}!\n"
-            "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
-            "<code>✨ PREMIUM SUBSCRIBER</code> ✅\n\n"
-            "Thank you for being a valued member! Your subscription is <b>active</b>.\n"
-            "Use <b>/premem</b> anytime to view your subscription details and key.",
-            parse_mode="HTML"
-        )
-    else:
-        await call.message.answer(
-            f"👋 Hi <b>{name}</b>!\nWelcome to MoneyMaker Premium! 🚀\n\nUnlock exclusive tips, signals, and more.",
-            parse_mode="HTML",
-            reply_markup=premium_menu(name)
-        )
-
-@dp.callback_query_handler(lambda c: c.data == "see_features")
-async def see_features(call: CallbackQuery):
-    try:
-        await bot.delete_message(call.message.chat.id, call.message.message_id)
-    except Exception:
-        pass
-    await call.message.answer(
-        "Hello thier",
-        reply_markup=back_button()
-    )
 
 @dp.message_handler(commands=["check"])
 async def check_subscribers(message: Message):
