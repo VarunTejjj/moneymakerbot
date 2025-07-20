@@ -2,6 +2,7 @@ import asyncio
 import os
 import time
 import datetime
+import logging
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Message, CallbackQuery
@@ -11,6 +12,9 @@ from pymongo import MongoClient
 from config import BOT_TOKEN, UPI_ID, UPI_NAME, KEY_VALIDITY_DAYS
 from screenshot_checker import check_screenshot
 from subscription import generate_key
+
+# Enable basic logging
+logging.basicConfig(level=logging.INFO)
 
 # --- MongoDB Atlas connection (standard URI for Termux and servers) ---
 MONGODB_URI = "mongodb://thepvt:MadMax31@thepvt-shard-00-00.1pyehh7.mongodb.net:27017,thepvt-shard-00-01.1pyehh7.mongodb.net:27017,thepvt-shard-00-02.1pyehh7.mongodb.net:27017/?ssl=true&replicaSet=atlas-mqak2q-shard-0&authSource=admin&retryWrites=true&w=majority"
@@ -38,6 +42,7 @@ dp = Dispatcher(bot)
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
+    logging.info(f"/start used by {message.from_user.id}")
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📢 Join Channel", url="https://t.me/yourpublicchannel")],
         [InlineKeyboardButton(text="💰 Take Subscription", callback_data="subscribe")]
@@ -46,10 +51,14 @@ async def start(message: Message):
 
 @dp.callback_query_handler(lambda c: c.data == "subscribe")
 async def subscribe_instruction(call: CallbackQuery):
-    await call.answer()  # Always answer the callback to close the Telegram "loading" animation
+    try:
+        await call.answer()
+    except Exception as e:
+        logging.warning(f"Failed to answer callback: {e}")
     user_id = call.from_user.id
     now = int(time.time())
     expiry = get_user_expiry(user_id)
+    logging.info(f"Subscribe pressed by {user_id}, expiry: {expiry}")
     if expiry > now:
         expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
         await call.message.answer(
@@ -69,6 +78,7 @@ async def subscribe_instruction(call: CallbackQuery):
 
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
+    logging.info(f"Photo received from {message.from_user.id}")
     photo = message.photo[-1]
     file = await bot.get_file(photo.file_id)
     file_path = file.file_path
@@ -77,41 +87,45 @@ async def handle_photo(message: Message):
     with open(tmp_path, "wb") as f:
         f.write(image_data.read())
 
-    if check_screenshot(tmp_path):
-        key = generate_key()
-        now = int(time.time())
-        expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
-        set_user_subscription(message.from_user.id, key, expiry)
-        store_key(key, expiry, message.from_user.id)
-        invite = await bot.create_chat_invite_link(
-            chat_id=-1002731631370,
-            member_limit=1,
-            expire_date=now + 3600
-        )
-        await message.answer(
-            f"✅ Payment Verified!\n\n"
-            f"🔑 Your Key: `{key}`\n"
-            f"📥 [Tap here to join the private channel]({invite.invite_link})\n"
-            f"⚠️ This link can only be used once and will expire in 1 hour.",
-            parse_mode=ParseMode.MARKDOWN
-        )
-
-        async def delayed_revoke():
-            await asyncio.sleep(600)
-            try:
-                await bot.revoke_chat_invite_link(
-                    chat_id=-1002731631370,
-                    invite_link=invite.invite_link
-                )
-            except Exception as e:
-                print(f"[ERROR] Failed to revoke invite: {e}")
-        asyncio.create_task(delayed_revoke())
-    else:
-        await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
-
-    os.remove(tmp_path)
+    try:
+        if check_screenshot(tmp_path):
+            key = generate_key()
+            now = int(time.time())
+            expiry = now + KEY_VALIDITY_DAYS * 24 * 60 * 60
+            set_user_subscription(message.from_user.id, key, expiry)
+            store_key(key, expiry, message.from_user.id)
+            invite = await bot.create_chat_invite_link(
+                chat_id=-1002731631370,
+                member_limit=1,
+                expire_date=now + 3600
+            )
+            await message.answer(
+                f"✅ Payment Verified!\n\n"
+                f"🔑 Your Key: `{key}`\n"
+                f"📥 [Tap here to join the private channel]({invite.invite_link})\n"
+                f"⚠️ This link can only be used once and will expire in 1 hour.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            async def delayed_revoke():
+                await asyncio.sleep(600)
+                try:
+                    await bot.revoke_chat_invite_link(
+                        chat_id=-1002731631370,
+                        invite_link=invite.invite_link
+                    )
+                except Exception as e:
+                    logging.warning(f"Failed to revoke invite: {e}")
+            asyncio.create_task(delayed_revoke())
+        else:
+            await message.answer("❌ Screenshot is invalid. Please send a valid UPI payment screenshot.")
+    except Exception as e:
+        logging.error(f"Error in handle_photo: {e}")
+        await message.answer("An error occurred while checking your screenshot. Please try again.")
+    finally:
+        os.remove(tmp_path)
 
 async def main():
+    logging.info("Bot started.")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
