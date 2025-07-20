@@ -2,8 +2,8 @@ import asyncio
 import os
 import time
 import datetime
-import logging
 import json
+import logging
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Message, CallbackQuery
@@ -13,7 +13,8 @@ from config import BOT_TOKEN, UPI_ID, UPI_NAME, KEY_VALIDITY_DAYS
 from screenshot_checker import check_screenshot
 from subscription import generate_key
 
-# File to store subscriptions: {user_id: expiry}
+logging.basicConfig(level=logging.INFO)
+
 SUBS_FILE = "subscriptions.json"
 
 def load_subscriptions():
@@ -36,14 +37,13 @@ def set_user_subscription(user_id, expiry):
     subs[str(user_id)] = expiry
     save_subscriptions(subs)
 
-# --- aiogram setup ---
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Join Channel", url="https://t.me/yourpublicchannel")],
+        [InlineKeyboardButton(text="📢 Join Channel", url="https://t.me/+nkPAaWA1TI8xOTVl")],
         [InlineKeyboardButton(text="💰 Take Subscription", callback_data="subscribe")]
     ])
     await message.answer("Welcome! Choose an option below:", reply_markup=keyboard)
