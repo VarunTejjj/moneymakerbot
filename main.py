@@ -92,11 +92,9 @@ async def delete_specific_messages(chat_id, message_ids):
             pass
 
 async def delete_bot_and_user_messages(chat_id, from_id):
-    """Delete last N messages from bot and user (workaround for cleaning chat upon payment verification)."""
     try:
         to_del = []
         async for msg in bot.iter_history(chat_id, limit=30):
-            # Remove bot's own messages or user's photo (their payment screenshot)
             if msg.from_user and (msg.from_user.id == (await bot.me).id or (msg.from_user.id == from_id and msg.content_type == 'photo')):
                 to_del.append(msg.message_id)
         for mid in to_del:
@@ -113,7 +111,7 @@ async def start(message: Message):
     in_channel = await is_member(bot, user_id, PUBLIC_CHANNEL_ID)
     in_group = await is_member(bot, user_id, FORCE_GROUP_ID)
     if not in_channel or not in_group:
-        sent = await message.answer(
+        await message.answer(
             "🚀 To continue, join BOTH our official channel and group:\n\n"
             f"1️⃣ [Join Channel]({PUBLIC_CHANNEL_LINK})\n"
             f"2️⃣ [Join Group]({FORCE_GROUP_LINK})\n\n"
@@ -225,14 +223,14 @@ async def subscribe_instruction(call: CallbackQuery):
             parse_mode="HTML"
         )
     else:
-        sent = await call.message.answer(
+        menu_msg = await call.message.answer(
             f"To get <b>7 days of premium access</b>:\n\n"
             f"💸 <b>Pay ₹5</b> UPI: <code>{UPI_ID}</code>\n"
             f"Name: <b>{UPI_NAME}</b>\n\n"
             "Then send your payment screenshot here.",
             parse_mode="HTML"
         )
-        # Store msg id for deletion after payment, using context storage as needed if integrating further
+        # Optionally store menu_msg.message_id for deletion
 
 @dp.message_handler(content_types=types.ContentType.PHOTO)
 async def handle_photo(message: Message):
@@ -277,9 +275,19 @@ async def handle_photo(message: Message):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)]
             ])
-            # Delete all prior bot and user screenshot messages
+            # Delete the checking_msg, user's screenshot photo, and prior bot menus/instructions
+            await asyncio.sleep(0.5)
+            try:
+                await bot.delete_message(message.chat.id, checking_msg.message_id)
+            except Exception:
+                pass
+            try:
+                await bot.delete_message(message.chat.id, message.message_id)
+            except Exception:
+                pass
+            # Clean up previous up-to-20 bot messages (menus/instructions)
             await delete_bot_and_user_messages(message.chat.id, message.from_user.id)
-            await asyncio.sleep(0.7)
+            await asyncio.sleep(0.3)
             await message.answer(
                 f"✅ <b>Payment Verified!</b>\n\n"
                 f"🔑 <b>Your Key:</b> <code>{key}</code>\n"
@@ -302,6 +310,14 @@ async def handle_photo(message: Message):
 
 @dp.message_handler(commands=["premem"])
 async def premium_member(message: Message):
+    # Remove the previous message in chat ("menu" or features, etc) before showing details
+    try:
+        history = [msg async for msg in bot.iter_history(message.chat.id, limit=2)]
+        if len(history) == 2:
+            prev_msg = history[1]
+            await bot.delete_message(message.chat.id, prev_msg.message_id)
+    except Exception:
+        pass
     user_id = message.from_user.id
     record = get_user_record(user_id)
     expiry = record.get("expiry", 0)
@@ -311,17 +327,55 @@ async def premium_member(message: Message):
         purchase_time = expiry - KEY_VALIDITY_DAYS * 24 * 60 * 60
         purchase_str = datetime.datetime.fromtimestamp(purchase_time).strftime('%Y-%m-%d %H:%M:%S')
         expiry_str = datetime.datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
-        await message.answer(
+        sent = await message.answer(
             "<b>👤 Premium Subscription Details</b>\n\n"
             f"<b>Purchase Date:</b> {purchase_str}\n"
             f"<b>Expiry Date:</b> {expiry_str}\n\n"
             f"<b>Your Key:</b> <span class=\"tg-spoiler\">{key}</span>",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=back_button()
         )
     else:
         await message.answer(
             "❌ You are not a premium subscriber. Please subscribe to access premium features."
         )
+
+@dp.callback_query_handler(lambda c: c.data == "back_to_menu")
+async def back_to_menu(call: CallbackQuery):
+    try:
+        await bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception:
+        pass
+    name = call.from_user.first_name or "there"
+    user_id = call.from_user.id
+    expiry = get_user_expiry(user_id)
+    now = int(time.time())
+    if expiry > now:
+        await call.message.answer(
+            f"🏆 Hi {name}!\n"
+            "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
+            "<code>✨ PREMIUM SUBSCRIBER</code> ✅\n\n"
+            "Thank you for being a valued member! Your subscription is <b>active</b>.\n"
+            "Use <b>/premem</b> anytime to view your subscription details and key.",
+            parse_mode="HTML"
+        )
+    else:
+        await call.message.answer(
+            f"👋 Hi <b>{name}</b>!\nWelcome to MoneyMaker Premium! 🚀\n\nUnlock exclusive tips, signals, and more.",
+            parse_mode="HTML",
+            reply_markup=premium_menu(name)
+        )
+
+@dp.callback_query_handler(lambda c: c.data == "see_features")
+async def see_features(call: CallbackQuery):
+    try:
+        await bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception:
+        pass
+    await call.message.answer(
+        "Hello thier",
+        reply_markup=back_button()
+    )
 
 @dp.message_handler(commands=["check"])
 async def check_subscribers(message: Message):
