@@ -95,6 +95,34 @@ async def delete_single_message_safe(chat_id, message_id):
 async def delete_messages_list(chat_id, message_ids):
     for mid in message_ids:
         await delete_single_message_safe(chat_id, mid)
+        
+@dp.callback_query_handler(lambda c: c.data == "lets_start")
+async def lets_start_handler(call: CallbackQuery):
+    try:
+        # Delete the payment verified message
+        await bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception:
+        pass
+    user_id = call.from_user.id
+    name = call.from_user.first_name or "there"
+    expiry = get_user_expiry(user_id)
+    # Show MAIN subscriber welcome (just like /start would for an active premium)
+    if expiry > int(time.time()):
+        await call.message.answer(
+            f"🏆 Hi {name}!\n"
+            "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
+            "<code>✨ PREMIUM SUBSCRIBER</code> ✅\n\n"
+            "Thank you for being a valued member! Your subscription is <b>active</b>.\n"
+            "Use <b>/premem</b> anytime to view your subscription details and key.",
+            parse_mode="HTML"
+        )
+    else:
+        await call.message.answer(
+            f"👋 Hi <b>{name}</b>!\n"
+            "Welcome to MoneyMaker Premium! 🚀\n\nUnlock exclusive tips, signals, and more.",
+            parse_mode="HTML",
+            reply_markup=premium_menu(name)
+        )
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
@@ -287,35 +315,6 @@ async def handle_photo(message: Message):
                 member_limit=1,
                 expire_date=now + 3600
             )
-            
-            @dp.callback_query_handler(lambda c: c.data == "lets_start")
-async def lets_start_handler(call: CallbackQuery):
-    try:
-        # Delete the payment verified message
-        await bot.delete_message(call.message.chat.id, call.message.message_id)
-    except Exception:
-        pass
-    user_id = call.from_user.id
-    name = call.from_user.first_name or "there"
-    expiry = get_user_expiry(user_id)
-    # Show MAIN subscriber welcome (just like /start would for an active premium)
-    if expiry > int(time.time()):
-        await call.message.answer(
-            f"🏆 Hi {name}!\n"
-            "<b>Welcome to MoneyMaker Premium! 🚀</b>\n\n"
-            "<code>✨ PREMIUM SUBSCRIBER</code> ✅\n\n"
-            "Thank you for being a valued member! Your subscription is <b>active</b>.\n"
-            "Use <b>/premem</b> anytime to view your subscription details and key.",
-            parse_mode="HTML"
-        )
-    else:
-        await call.message.answer(
-            f"👋 Hi <b>{name}</b>!\n"
-            "Welcome to MoneyMaker Premium! 🚀\n\nUnlock exclusive tips, signals, and more.",
-            parse_mode="HTML",
-            reply_markup=premium_menu(name)
-        )
-
             
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton("📥 Join Private Channel", url=invite.invite_link)],
