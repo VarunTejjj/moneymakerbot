@@ -132,14 +132,65 @@ async def lets_start_handler(call: CallbackQuery):
 @dp.callback_query_handler(lambda c: c.data == "refer")
 async def refer_button(call: CallbackQuery):
     user_id = call.from_user.id
-    referral_link = f"https://t.me/{(await bot.me).username}?start=ref{user_id}"
+    bot_info = await bot.get_me()
+    referral_link = f"https://t.me/{bot_info.username}?start=ref{user_id}"
+
+    # Load referral points (assume you store in referrals.json)
+    referrals = load_referrals()
+    points = len(referrals.get(str(user_id), {}).get("referrals", []))  # 1 point per invited user
+
+    # Compose dashboard message
     text = (
-        "🔗 <b>Your Referral Link</b>:\n"
-        f"<code>{referral_link}</code>\n\n"
-        "Share this link with friends. When they join, you'll both get benefits!"
+        f"👤 <b>Name:</b> {call.from_user.first_name}\n"
+        f"🔗 <b>Your Referral Link:</b>\n<code>{referral_link}</code>\n\n"
+        f"🏅 <b>Referral Points:</b> {points}\n\n"
+        "Earn 1 point for every user who joins the bot using your link. "
+        "Redeem 5 points for 2 extra days of subscription!"
     )
+
+    # Inline Redeem button, only if 5+ points
+    if points >= 5:
+        markup = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton("Redeem 2 Days Premium (5 points)", callback_data="redeem_points")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="back_to_menu")]
+            ]
+        )
+    else:
+        markup = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton("⬅️ Back", callback_data="back_to_menu")]
+            ]
+        )
+
+    # Clean up previous message, then show dashboard
     await bot.delete_message(call.message.chat.id, call.message.message_id)
-    await call.message.answer(text, parse_mode="HTML", reply_markup=back_button())
+    await call.message.answer(text, reply_markup=markup, parse_mode="HTML")
+
+@dp.callback_query_handler(lambda c: c.data == "redeem_points")
+async def redeem_points(call: CallbackQuery):
+    user_id = str(call.from_user.id)
+    referrals = load_referrals()
+    if len(referrals.get(user_id, {}).get("referrals", [])) >= 5:
+        # Deduct 5 points and grant 2 days premium
+        referrals[user_id]["referrals"] = referrals[user_id]["referrals"][5:]
+        save_referrals(referrals)
+
+        # Extend premium (update subscriptions.json accordingly)
+        subs = load_subscriptions()
+        record = subs.get(user_id, {})
+        expiry = max(int(time.time()), record.get("expiry", 0)) + 2*86400
+        record["expiry"] = expiry
+        subs[user_id] = record
+        save_subscriptions(subs)
+
+        await bot.delete_message(call.message.chat.id, call.message.message_id)
+        await call.message.answer(
+            "🎉 You have redeemed 5 referral points for 2 extra days of premium!\n"
+            "Thank you for inviting friends to MoneyMaker Premium."
+        )
+    else:
+        await call.answer("You need at least 5 referral points to redeem.", show_alert=True)
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
@@ -489,18 +540,28 @@ async def remove_expired_users():
             save_subscriptions(subs)
         await asyncio.sleep(3600)
 
-@dp.message_handler(commands=["referral"])
-async def referral_info(message: Message):
+@dp.message_handler(commands=["refer"])
+async def refer_command(message: Message):
     user_id = message.from_user.id
-    ref_link = f"https://t.me/{(await bot.get_me()).username}?start=ref{user_id}"
+    bot_username = (await bot.get_me()).username
+    referral_link = f"https://t.me/{bot_username}?start=ref{user_id}"
+    # Example: suppose load_referrals is a function returning ref points.
     referrals = load_referrals()
-    referred = referrals.get(str(user_id), [])
-    await message.answer(
-        f"🚀 *Your Referral Link:*\n{ref_link}\n\n"
-        f"You've referred *{len(referred)}* friends so far.\n"
-        "Share this link: every new user who joins using it will be added to your referrals.",
-        parse_mode="Markdown"
+    points = len(referrals.get(str(user_id), []))
+    text = (
+        f"🔗 <b>Your Referral Link</b>:\n{referral_link}\n\n"
+        f"🏅 <b>Your Referral Points:</b> {points}\n\n"
+        "Share with friends & get rewarded when they join & subscribe! 🎉"
     )
+    if points >= 5:
+        markup = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton("Redeem 2 Days Premium", callback_data="redeem_points")]
+            ]
+        )
+        await message.answer(text, parse_mode="HTML", reply_markup=markup)
+    else:
+        await message.answer(text, parse_mode="HTML")
 
 async def main():
     asyncio.create_task(remove_expired_users())
