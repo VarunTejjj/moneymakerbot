@@ -71,8 +71,12 @@ async def is_member(bot, user_id, chat_id):
 def premium_menu(user_name):
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton("💳 Take Subscription", callback_data="subscribe")],
-        [InlineKeyboardButton("👁️‍🗨️ See Premium Features", callback_data="see_features")]
+        [InlineKeyboardButton("👁️‍🗨️ See Premium Features", callback_data="see_features")],
+        [InlineKeyboardButton("🔗 Refer & Earn", callback_data="refer")]
     ])
+
+bot_username = (await bot.me).username
+referral_link = f"https://t.me/{bot_username}?start=ref{user_id}"
 
 def force_join_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -123,6 +127,18 @@ async def lets_start_handler(call: CallbackQuery):
             parse_mode="HTML",
             reply_markup=premium_menu(name)
         )
+
+@dp.callback_query_handler(lambda c: c.data == "refer")
+async def refer_button(call: CallbackQuery):
+    user_id = call.from_user.id
+    referral_link = f"https://t.me/{(await bot.me).username}?start=ref{user_id}"
+    text = (
+        "🔗 <b>Your Referral Link</b>:\n"
+        f"<code>{referral_link}</code>\n\n"
+        "Share this link with friends. When they join, you'll both get benefits!"
+    )
+    await bot.delete_message(call.message.chat.id, call.message.message_id)
+    await call.message.answer(text, parse_mode="HTML", reply_markup=back_button())
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
@@ -461,6 +477,17 @@ async def remove_expired_users():
         if updated:
             save_subscriptions(subs)
         await asyncio.sleep(3600)
+
+@dp.message_handler(commands=["refer"])
+async def refer_command(message: Message):
+    user_id = message.from_user.id
+    referral_link = f"https://t.me/{(await bot.me).username}?start=ref{user_id}"
+    text = (
+        "🔗 <b>Your Referral Link</b>:\n"
+        f"<code>{referral_link}</code>\n\n"
+        "Share this link with friends. When they join, you'll both get benefits!"
+    )
+    await message.answer(text, parse_mode="HTML")
 
 async def main():
     asyncio.create_task(remove_expired_users())
