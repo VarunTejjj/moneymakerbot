@@ -17,7 +17,7 @@ from subscription import generate_key
 logging.basicConfig(level=logging.INFO)
 
 SUBS_FILE = "subscriptions.json"
-ADMIN_IDS = [1831313735]  # Your admin user ID
+ADMIN_IDS = [1831313735]  # Admin user ID
 
 def load_subscriptions():
     try:
@@ -48,7 +48,6 @@ def set_user_subscription(user_id, key, expiry):
     save_subscriptions(subs)
 
 def escape_markdown(text):
-    # Escapes all special MarkdownV2 characters for Telegram
     return re.sub(r'([_*\[\]()~`>#+\-=|{}.!\\<>\?])', r'\\\1', str(text))
 
 bot = Bot(token=BOT_TOKEN)
@@ -56,12 +55,12 @@ dp = Dispatcher(bot)
 
 @dp.message_handler(Command("start"))
 async def start(message: Message):
-    name = message.from_user.first_name or "there"
+    name = escape_markdown(message.from_user.first_name or "there")
     expiry = get_user_expiry(message.from_user.id)
     now = int(time.time())
     if expiry > now:
         await message.answer(
-            f"🏆 Hi {escape_markdown(name)}!\n"
+            f"🏆 Hi {name}!\n"
             f"*Welcome to MoneyMaker Premium! 🚀*\n\n"
             "`✨ PREMIUM SUBSCRIBER` ✅\n\n"
             "Thank you for being a valued member! Your subscription is *active*.\n"
@@ -74,7 +73,7 @@ async def start(message: Message):
             [InlineKeyboardButton("💳 Get Subscription", callback_data="subscribe")]
         ])
         await message.answer(
-            f"👋 *Hi {escape_markdown(name)}!*\n"
+            f"👋 *Hi {name}!*\n"
             "*Welcome to MoneyMaker Premium! 🚀*\n\n"
             "Unlock exclusive tips, signals, and more.\n"
             "Press one of the buttons below to continue.",
