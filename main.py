@@ -58,7 +58,7 @@ def get_user_expiry(user_id):
     record = get_user_record(user_id)
     return record.get("expiry", 0)
 
-def get_user_key(user_id):
+def get_user_key(user_id) -> str:
     record = get_user_record(user_id)
     return record.get("key", None)
 
